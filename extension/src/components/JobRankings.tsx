@@ -248,235 +248,239 @@ function JobRankings({
       
       {/* Job list */}
       {rankings.length > 0 && (
-        <Box 
-          ref={scrollContainerRef}
-          sx={{ 
-            overflowY: 'auto',
-            maxHeight: '450px', // Use fixed height instead of vh units
-            width: '100%'
-          }}
-        >
-          <List sx={{ 
-            width: '100%',
-            p: 0
-          }}>
-            {rankings.map((job, index) => (
-              <React.Fragment key={job.id}>
-                <Paper 
-                  elevation={1}
-                  sx={{ 
-                    mb: 1,
-                    '&:hover': {
-                      backgroundColor: 'rgba(0, 0, 0, 0.04)'
-                    }
-                  }}
-                >
-                  <ListItem
-                    alignItems="flex-start"
-                    button
-                    onClick={() => onJobClick(job.id)}
-                    sx={{ flexDirection: 'column', alignItems: 'stretch' }}
+        <Box sx={{ 
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 2,
+          height: '100%'
+        }}>
+          <Box 
+            ref={scrollContainerRef}
+            sx={{ 
+              overflowY: 'auto',
+              maxHeight: 'calc(100vh - 300px)', // Adjust height to leave space for buttons
+              width: '100%'
+            }}
+          >
+            <List sx={{ 
+              width: '100%',
+              p: 0
+            }}>
+              {rankings.map((job, index) => (
+                <React.Fragment key={job.id}>
+                  <Paper 
+                    elevation={1}
+                    sx={{ 
+                      mb: 1,
+                      '&:hover': {
+                        backgroundColor: 'rgba(0, 0, 0, 0.04)'
+                      }
+                    }}
                   >
-                    <Box sx={{ 
-                      display: 'flex',
-                      alignItems: 'center',
-                      width: '100%'
-                    }}>
-                      <ListItemAvatar>
-                        <Avatar sx={{ bgcolor: 'primary.main' }}>
-                          {getCompanyInitials(job.company)}
-                        </Avatar>
-                      </ListItemAvatar>
-                      <ListItemText
-                        primary={
-                          <Box sx={{ 
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            width: '100%'
-                          }}>
-                            <Typography 
-                              variant="subtitle1"
-                              component="span"
-                              noWrap
-                              sx={{ 
-                                maxWidth: '70%',
-                                fontWeight: 600
-                              }}
-                            >
-                              {job.title}
-                            </Typography>
-                            <Chip 
-                              label={formatScore(job)}
-                              color={getScoreColor(job) as "success" | "primary" | "warning" | "error"}
-                              size="small"
-                              sx={{ ml: 1 }}
-                            />
-                          </Box>
-                        }
-                        secondary={
-                          <>
-                            <Typography
-                              variant="body2"
-                              color="text.primary"
-                              component="span"
-                            >
-                              {job.company}
-                            </Typography>
-                            {" — "}
-                            <Typography
-                              variant="body2"
-                              color="text.secondary"
-                              component="span"
-                            >
-                              {job.location}
-                            </Typography>
-                          </>
-                        }
-                      />
-                    </Box>
-                    
-                    {/* Key skills section - collapsible */}
-                    {job.keySkills && job.keySkills.length > 0 && (
+                    <ListItem
+                      alignItems="flex-start"
+                      button
+                      onClick={() => onJobClick(job.id)}
+                      sx={{ flexDirection: 'column', alignItems: 'stretch' }}
+                    >
                       <Box sx={{ 
-                        pl: 9,
-                        pt: 1,
+                        display: 'flex',
+                        alignItems: 'center',
                         width: '100%'
                       }}>
-                        <Box 
-                          onClick={(e) => toggleSkills(job.id, e)} 
-                          sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Typography variant="caption" color="text.secondary">
-                            Key Skills Required:
-                          </Typography>
-                          <IconButton 
-                            size="small" 
-                            onClick={(e) => toggleSkills(job.id, e)}
-                            sx={{ ml: 1, p: 0 }}
-                          >
-                            {expandedSkills[job.id] ? 
-                              <KeyboardArrowUpIcon fontSize="small" /> : 
-                              <KeyboardArrowDownIcon fontSize="small" />
-                            }
-                          </IconButton>
-                        </Box>
-                        
-                        {expandedSkills[job.id] && (
-                          <Box sx={{ 
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 0.5,
-                            mt: 0.5
-                          }}>
-                            {job.keySkills.map((skill, i) => (
+                        <ListItemAvatar>
+                          <Avatar sx={{ bgcolor: 'primary.main' }}>
+                            {getCompanyInitials(job.company)}
+                          </Avatar>
+                        </ListItemAvatar>
+                        <ListItemText
+                          primary={
+                            <Box sx={{ 
+                              display: 'flex',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              width: '100%'
+                            }}>
+                              <Typography 
+                                variant="subtitle1"
+                                component="span"
+                                noWrap
+                                sx={{ 
+                                  maxWidth: '70%',
+                                  fontWeight: 600
+                                }}
+                              >
+                                {job.title}
+                              </Typography>
                               <Chip 
-                                key={i}
-                                label={skill}
+                                label={formatScore(job)}
+                                color={getScoreColor(job) as "success" | "primary" | "warning" | "error"}
                                 size="small"
-                                variant="outlined"
-                                color="secondary"
+                                sx={{ ml: 1 }}
                               />
-                            ))}
-                          </Box>
-                        )}
+                            </Box>
+                          }
+                          secondary={
+                            <>
+                              <Typography
+                                variant="body2"
+                                color="text.primary"
+                                component="span"
+                              >
+                                {job.company}
+                              </Typography>
+                              {" — "}
+                              <Typography
+                                variant="body2"
+                                color="text.secondary"
+                                component="span"
+                              >
+                                {job.location}
+                              </Typography>
+                            </>
+                          }
+                        />
                       </Box>
-                    )}
-                    
-                    {/* Matching keywords - collapsible */}
-                    {job.matchingKeywords && job.matchingKeywords.length > 0 && (
-                      <Box sx={{ 
-                        pl: 9,
-                        pt: 1,
-                        width: '100%'
-                      }}>
-                        <Box 
-                          onClick={(e) => toggleMatching(job.id, e)} 
-                          sx={{ 
-                            display: 'flex', 
-                            alignItems: 'center',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <Typography variant="caption" color="text.secondary">
-                            Your Matching Skills:
-                          </Typography>
-                          <IconButton 
-                            size="small" 
-                            onClick={(e) => toggleMatching(job.id, e)}
-                            sx={{ ml: 1, p: 0 }}
+                      
+                      {/* Key skills section - collapsible */}
+                      {job.keySkills && job.keySkills.length > 0 && (
+                        <Box sx={{ 
+                          pl: 9,
+                          pt: 1,
+                          width: '100%'
+                        }}>
+                          <Box 
+                            onClick={(e) => toggleSkills(job.id, e)} 
+                            sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center',
+                              cursor: 'pointer'
+                            }}
                           >
-                            {expandedMatching[job.id] ? 
-                              <KeyboardArrowUpIcon fontSize="small" /> : 
-                              <KeyboardArrowDownIcon fontSize="small" />
-                            }
-                          </IconButton>
-                        </Box>
-                        
-                        {expandedMatching[job.id] && (
-                          <Box sx={{ 
-                            display: 'flex',
-                            flexWrap: 'wrap',
-                            gap: 0.5,
-                            mt: 0.5
-                          }}>
-                            {job.matchingKeywords.map((keyword, i) => (
-                              <Chip 
-                                key={i}
-                                label={keyword}
-                                size="small"
-                                variant="outlined"
-                                color="primary"
-                                icon={<AssignmentIcon />}
-                              />
-                            ))}
+                            <Typography variant="caption" color="text.secondary">
+                              Key Skills Required:
+                            </Typography>
+                            <IconButton 
+                              size="small" 
+                              onClick={(e) => toggleSkills(job.id, e)}
+                              sx={{ ml: 1, p: 0 }}
+                            >
+                              {expandedSkills[job.id] ? 
+                                <KeyboardArrowUpIcon fontSize="small" /> : 
+                                <KeyboardArrowDownIcon fontSize="small" />
+                              }
+                            </IconButton>
                           </Box>
-                        )}
+                          
+                          {expandedSkills[job.id] && (
+                            <Box sx={{ 
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: 0.5,
+                              mt: 0.5
+                            }}>
+                              {job.keySkills.map((skill, i) => (
+                                <Chip 
+                                  key={i}
+                                  label={skill}
+                                  size="small"
+                                  variant="outlined"
+                                  color="secondary"
+                                />
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+                      
+                      {/* Matching keywords - collapsible */}
+                      {job.matchingKeywords && job.matchingKeywords.length > 0 && (
+                        <Box sx={{ 
+                          pl: 9,
+                          pt: 1,
+                          width: '100%'
+                        }}>
+                          <Box 
+                            onClick={(e) => toggleMatching(job.id, e)} 
+                            sx={{ 
+                              display: 'flex', 
+                              alignItems: 'center',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <Typography variant="caption" color="text.secondary">
+                              Your Matching Skills:
+                            </Typography>
+                            <IconButton 
+                              size="small" 
+                              onClick={(e) => toggleMatching(job.id, e)}
+                              sx={{ ml: 1, p: 0 }}
+                            >
+                              {expandedMatching[job.id] ? 
+                                <KeyboardArrowUpIcon fontSize="small" /> : 
+                                <KeyboardArrowDownIcon fontSize="small" />
+                              }
+                            </IconButton>
+                          </Box>
+                          
+                          {expandedMatching[job.id] && (
+                            <Box sx={{ 
+                              display: 'flex',
+                              flexWrap: 'wrap',
+                              gap: 0.5,
+                              mt: 0.5
+                            }}>
+                              {job.matchingKeywords.map((keyword, i) => (
+                                <Chip 
+                                  key={i}
+                                  label={keyword}
+                                  size="small"
+                                  variant="outlined"
+                                  color="primary"
+                                  icon={<AssignmentIcon />}
+                                />
+                              ))}
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+                      
+                      {/* LinkedIn URL */}
+                      <Box sx={{ pl: 9, pt: 1 }}>
+                        <Link 
+                          href={job.url}
+                          target="_blank"
+                          rel="noopener"
+                          onClick={(e) => e.stopPropagation()}
+                          color="primary"
+                          underline="hover"
+                          variant="body2"
+                        >
+                          View in new tab
+                        </Link>
                       </Box>
-                    )}
-                    
-                    {/* LinkedIn URL */}
-                    <Box sx={{ pl: 9, pt: 1 }}>
-                      <Link 
-                        href={job.url}
-                        target="_blank"
-                        rel="noopener"
-                        onClick={(e) => e.stopPropagation()}
-                        color="primary"
-                        underline="hover"
-                        variant="body2"
-                      >
-                        View in new tab
-                      </Link>
-                    </Box>
-                  </ListItem>
-                </Paper>
-                {index < rankings.length - 1 && (
-                  <Divider variant="inset" component="li" />
-                )}
-              </React.Fragment>
-            ))}
-          </List>
+                    </ListItem>
+                  </Paper>
+                  {index < rankings.length - 1 && (
+                    <Divider variant="inset" component="li" />
+                  )}
+                </React.Fragment>
+              ))}
+            </List>
+          </Box>
           
           {/* Load More Button for pagination within current jobs */}
-          {onLoadMore && (hasMoreJobs || localHasMoreJobs) && (
+          {(hasMoreJobs || localHasMoreJobs) && (
             <Box sx={{ 
               display: 'flex', 
               justifyContent: 'center',
               width: '100%',
-              position: 'static', // Changed from sticky to static
-              marginTop: '16px', // Add margin top for spacing after job list
-              marginBottom: '16px', // Add margin bottom for spacing
               backgroundColor: 'background.paper',
               pt: 2,
               pb: 2,
               borderTop: '2px solid',
               borderColor: 'primary.main',
-              zIndex: 2, // Lower z-index so it doesn't overlay incorrectly
+              zIndex: 2,
               boxShadow: '0px -4px 12px rgba(0,0,0,0.15)'
             }}>
               <Button 
@@ -519,30 +523,38 @@ function JobRankings({
             </Box>
           )}
           
-          {/* Added the Analyze Next Page button at the bottom */}
-          {onLoadNextPage && (
-            <Box sx={{ 
-              display: 'flex', 
-              justifyContent: 'center',
-              width: '100%',
-              marginTop: '16px',
-              marginBottom: '16px',
-              pt: 1,
-              pb: 1,
-            }}>
+          {/* Analyze Next Page button - moved outside scrollable container */}
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'center',
+            width: '100%',
+            pt: 1,
+            pb: 1,
+            position: 'sticky',
+            bottom: 0,
+            backgroundColor: 'background.paper',
+            zIndex: 1,
+            borderTop: '1px solid',
+            borderColor: 'divider'
+          }}>
+            <Stack spacing={1} width="90%">
               <Tooltip 
-                title="This will navigate to the next page of LinkedIn job results and clear your current job analysis" 
-                placement="bottom"
+                title="Navigate to and automatically analyze the next page of LinkedIn job results" 
+                placement="top"
                 arrow
               >
                 <Button
-                  variant="outlined"
+                  variant="contained"
                   color="secondary"
                   onClick={onLoadNextPage}
                   disabled={isLoadingNextPage}
-                  startIcon={isLoadingNextPage ? <CircularProgress size={16} color="secondary" /> : <MoreHorizIcon />}
-                  size="medium"
-                  sx={{ width: '90%' }}
+                  startIcon={isLoadingNextPage ? <CircularProgress size={16} color="inherit" /> : <MoreHorizIcon />}
+                  size="large"
+                  sx={{ 
+                    width: '100%',
+                    py: 1.5,
+                    fontWeight: 'bold'
+                  }}
                 >
                   {isLoadingNextPage ? 
                     <Box sx={{ 
@@ -559,13 +571,16 @@ function JobRankings({
                         }
                       }
                     }}>
-                      <span>Loading...</span>
+                      <span>Analyzing Next Page...</span>
                     </Box> 
-                    : 'Analyze Next Page'}
+                    : 'Load & Analyze Next Page'}
                 </Button>
               </Tooltip>
-            </Box>
-          )}
+              <Typography variant="caption" color="text.secondary" align="center">
+                This will navigate to the next page and automatically analyze those jobs
+              </Typography>
+            </Stack>
+          </Box>
         </Box>
       )}
     </Box>

@@ -14,27 +14,31 @@ function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
 
   return (
-    <div
+    <Box
       role="tabpanel"
       hidden={value !== index}
-      id={`tabpanel-${index}`}
-      aria-labelledby={`tab-${index}`}
-      {...other}
-      style={{ 
-        height: '100%',
-        overflow: 'auto',
-        width: '100%'
+      id={`simple-tabpanel-${index}`}
+      aria-labelledby={`simple-tab-${index}`}
+      sx={{ 
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden'
       }}
+      {...other}
     >
       {value === index && (
         <Box sx={{ 
-          p: 2,
-          height: 'auto'
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          p: 1
         }}>
           {children}
         </Box>
       )}
-    </div>
+    </Box>
   );
 }
 
@@ -95,11 +99,53 @@ function App() {
       }
     });
 
-    // Setup message listener for loading message updates
+    // Setup message listener for loading message updates and next page success
     const messageListener = (message: any) => {
       if (message.action === 'UPDATE_LOADING_MESSAGE' && message.message) {
         console.log('Received loading message update:', message.message);
         setLoadingMessage(message.message);
+      } else if (message.action === 'NEXT_PAGE_SUCCESS' && message.data) {
+        console.log('Received next page success:', message.data);
+        // Automatically trigger job matching after next page success
+        setIsLoadingNextPage(false);
+        setError(null);
+        
+        // Automatically trigger job matching with the new jobs
+        console.log('Automatically triggering job matching after next page navigation');
+        setIsLoading(true);
+        setLoadingMessage('Matching jobs with your resume...');
+        chrome.runtime.sendMessage({ 
+          action: 'MATCH_JOBS',
+          start: 0,
+          limit: message.data.jobCount || 100, // Process all extracted jobs
+          displayLimit: 10 // But only show top 10 initially in UI, matching behavior of first page
+        }, (matchResponse) => {
+          console.log('Match jobs response after next page:', matchResponse);
+          setIsLoading(false);
+          
+          if (matchResponse && matchResponse.success && matchResponse.jobRankings) {
+            setJobRankings(matchResponse.jobRankings);
+            setHasMoreJobs(matchResponse.pagination?.hasMore || false);
+            
+            // Explicitly set pagination state to ensure consistent behavior
+            console.log('Explicitly ensuring pagination state is consistent with first page');
+            chrome.storage.local.get(['allJobRankings'], (result) => {
+              const allRankings = result.allJobRankings || [];
+              if (allRankings.length > 10) {
+                console.log(`Setting hasMoreJobs to true, as we have ${allRankings.length} total rankings with 10 displayed`);
+                setHasMoreJobs(true);
+              }
+            });
+          } else if (matchResponse && matchResponse.error) {
+            setError(`Error matching jobs: ${matchResponse.error}`);
+          } else {
+            setError('Unknown error matching jobs');
+          }
+        });
+      } else if (message.action === 'NEXT_PAGE_ERROR' && message.error) {
+        console.error('Next page error:', message.error);
+        setIsLoadingNextPage(false);
+        setError(`Error: ${message.error}`);
       }
     };
     
@@ -119,6 +165,7 @@ function App() {
       if (response && response.resumeUploaded) {
         setResumeUploaded(true);
         console.log('Resume is uploaded');
+        setTabValue(1);
       } else {
         setResumeUploaded(false);
         console.log('No resume uploaded yet');
@@ -164,8 +211,7 @@ function App() {
   }, []);
 
   // Handle resume upload
-  const handleResumeUpload = (resumeData: string, requiredLanguages?: string[]) => {
-    // If empty string is passed, it means we want to reset
+  const handleResumeUpload = (resumeData: string) => {
     if (!resumeData) {
       console.log('Resetting resume state');
       setResumeUploaded(false);
@@ -177,26 +223,17 @@ function App() {
         data: '' 
       });
       
-      // Reset required languages in storage
-      chrome.storage.local.set({ requiredLanguages: ['en'] });
-      
       return;
     }
     
-    console.log('Uploading resume with required languages:', requiredLanguages || ['en']);
+    console.log('Uploading resume');
     setError(null);
     setIsLoading(true);
     setResumeUploaded(false); // Reset the state to avoid conflicting UI
     
-    // Store the required languages in local storage for use in job matching
-    chrome.storage.local.set({ requiredLanguages: requiredLanguages || ['en'] }, () => {
-      console.log('Required languages saved to storage:', requiredLanguages || ['en']);
-    });
-    
     chrome.runtime.sendMessage({ 
       action: 'UPLOAD_RESUME', 
-      data: resumeData,
-      requiredLanguages: requiredLanguages || ['en']
+      data: resumeData
     }, (response) => {
       console.log('Resume upload response:', response);
       setIsLoading(false);
@@ -234,7 +271,7 @@ function App() {
     console.log('Manually requesting job matching...');
     setError(null);
     setIsLoading(true);
-    setLoadingMessage('Reading job descriptions...');
+    setLoadingMessage('Extracting job listings...');
     isMatchingJobsRef.current = true;
     // Reset pagination
     currentBatchRef.current = 0;
@@ -272,57 +309,50 @@ function App() {
           
           console.log(`Successfully extracted ${response.jobListings.length} job listings`);
           
-          // Get required languages from storage
-          chrome.storage.local.get(['requiredLanguages'], (storageData) => {
-            const requiredLanguages = storageData.requiredLanguages || ['en'];
-            console.log('Using required languages filter:', requiredLanguages);
+          // Now request job matching for ALL jobs, but with a display limit
+          console.log('Sending MATCH_JOBS message to backend for all jobs, with display pagination');
+          // Update loading message for API processing
+          setLoadingMessage('Processing job matches...');
+          chrome.runtime.sendMessage({ 
+            action: 'MATCH_JOBS',
+            start: 0,
+            limit: response.jobListings.length, // Process ALL jobs in the backend instead of just 10
+            displayLimit: 10 // But only show top 10 initially in UI
+          }, (matchResponse) => {
+            console.log('Match jobs response:', matchResponse);
+            setIsLoading(false);
+            isMatchingJobsRef.current = false;
             
-            // Now request job matching for ALL jobs, but with a display limit
-            console.log('Sending MATCH_JOBS message to backend for all jobs, with display pagination');
-            // Update loading message for API processing
-            setLoadingMessage('Processing job matches and filtering by language requirements...');
-            chrome.runtime.sendMessage({ 
-              action: 'MATCH_JOBS',
-              start: 0,
-              limit: response.jobListings.length, // Process ALL jobs in the backend instead of just 10
-              displayLimit: 10, // But only show top 10 initially in UI
-              requiredLanguages: requiredLanguages // Include language filter
-            }, (matchResponse) => {
-              console.log('Match jobs response:', matchResponse);
-              setIsLoading(false);
-              isMatchingJobsRef.current = false;
+            if (matchResponse && matchResponse.success && matchResponse.jobRankings) {
+              // Check if we have more than 10 results
+              const totalResults = matchResponse.jobRankings.length;
+              const initialBatchSize = 10;
+              const hasMore = totalResults > initialBatchSize;
               
-              if (matchResponse && matchResponse.success && matchResponse.jobRankings) {
-                // Check if we have more than 10 results
-                const totalResults = matchResponse.jobRankings.length;
-                const initialBatchSize = 10;
-                const hasMore = totalResults > initialBatchSize;
-                
-                console.log(`Received ${totalResults} total ranked jobs from backend after language filtering`);
-                
-                // Only show the top 10 jobs initially
-                setJobRankings(matchResponse.jobRankings.slice(0, initialBatchSize));
-                console.log(`Showing top ${initialBatchSize} jobs out of ${totalResults} total ranked jobs`);
-                
-                // We'll have more jobs to show if the total is greater than initial batch size
-                setHasMoreJobs(hasMore);
-                console.log('Setting hasMoreJobs to:', hasMore);
-                
-                // Store all rankings in storage for pagination
-                chrome.storage.local.set({ 
-                  allJobRankings: matchResponse.jobRankings,
-                  currentDisplayIndex: initialBatchSize
-                }, () => {
-                  console.log(`Stored all ${totalResults} ranked jobs in local storage for pagination. Has more: ${hasMore}`);
-                });
-              } else if (matchResponse && matchResponse.error) {
-                console.error('Error matching jobs:', matchResponse.error);
-                setError(`Error matching jobs: ${matchResponse.error}`);
-              } else {
-                console.error('Unknown error matching jobs');
-                setError('Failed to match jobs. Make sure both resume and job listings are available.');
-              }
-            });
+              console.log(`Received ${totalResults} total ranked jobs from backend after language filtering`);
+              
+              // Only show the top 10 jobs initially
+              setJobRankings(matchResponse.jobRankings.slice(0, initialBatchSize));
+              console.log(`Showing top ${initialBatchSize} jobs out of ${totalResults} total ranked jobs`);
+              
+              // We'll have more jobs to show if the total is greater than initial batch size
+              setHasMoreJobs(hasMore);
+              console.log('Setting hasMoreJobs to:', hasMore);
+              
+              // Store all rankings in storage for pagination
+              chrome.storage.local.set({ 
+                allJobRankings: matchResponse.jobRankings,
+                currentDisplayIndex: initialBatchSize
+              }, () => {
+                console.log(`Stored all ${totalResults} ranked jobs in local storage for pagination. Has more: ${hasMore}`);
+              });
+            } else if (matchResponse && matchResponse.error) {
+              console.error('Error matching jobs:', matchResponse.error);
+              setError(`Error matching jobs: ${matchResponse.error}`);
+            } else {
+              console.error('Unknown error matching jobs');
+              setError('Failed to match jobs. Make sure both resume and job listings are available.');
+            }
           });
         });
       } else {
@@ -347,7 +377,7 @@ function App() {
     // Get all rankings and current display index from storage
     chrome.storage.local.get(['allJobRankings', 'currentDisplayIndex'], (result) => {
       const allRankings = result.allJobRankings || [];
-      const currentIndex = result.currentDisplayIndex || 10;
+      const currentIndex = result.currentDisplayIndex || 0;
       
       console.log(`Loading more job rankings, current display index: ${currentIndex}, total rankings: ${allRankings.length}`);
       
@@ -399,33 +429,31 @@ function App() {
     
     console.log('Requesting to load jobs from the next page of LinkedIn results');
     
+    // Tell the user we're navigating to the next page
+    setLoadingMessage('Navigating to next page of job listings...');
+    
     chrome.runtime.sendMessage({
-      action: 'LOAD_NEXT_PAGE_JOBS'
-    }, (response) => {
-      setIsLoadingNextPage(false);
-      
-      if (response && response.success) {
-        console.log('Successfully loaded jobs from next page:', response.message);
-        // Clear existing job rankings
-        setJobRankings([]);
-        setHasMoreJobs(false);
-        
-        // Reset pagination state
-        chrome.storage.local.set({ 
-          allJobRankings: [],
-          currentDisplayIndex: 0
-        });
-        
-        // Show a success message
-        setError('Successfully loaded jobs from the next page. Click "Analyze Jobs" to rank them.');
-      } else if (response && response.error) {
-        console.error('Error loading jobs from next page:', response.error);
-        setError(`Error loading jobs from next page: ${response.error}`);
-      } else {
-        console.error('Unknown error loading jobs from next page');
-        setError('Failed to load jobs from the next page.');
-      }
+      action: 'LOAD_NEXT_PAGE_JOBS',
+      suppressScrolling: true // Signal that scrolling is handled by content script
     });
+    
+    // Don't need to handle the response here - our message listener will 
+    // automatically receive the NEXT_PAGE_SUCCESS message from the content
+    // script when navigation and job extraction is complete
+    
+    // Clear current job rankings immediately to show loading state
+    setJobRankings([]);
+    setHasMoreJobs(false);
+    
+    // Reset pagination state
+    chrome.storage.local.set({ 
+      allJobRankings: [],
+      currentDisplayIndex: 0
+    });
+    
+    // Note: We're not setting isLoadingNextPage to false here
+    // This will be handled by the NEXT_PAGE_SUCCESS or NEXT_PAGE_ERROR
+    // message handler we added earlier
   };
 
   // Handle job click to highlight on the page
@@ -494,56 +522,36 @@ function App() {
         {/* Loading indicator */}
         {isLoading && (
           <Box sx={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center',
             position: 'absolute',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            zIndex: 10
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            gap: 2,
+            zIndex: 1000,
+            backgroundColor: 'background.paper',
+            p: 3,
+            borderRadius: 1,
+            boxShadow: 3
           }}>
-            <Box sx={{ 
-              textAlign: 'center',
-              backgroundColor: 'white',
-              borderRadius: 2,
-              padding: 3,
-              boxShadow: 3,
-              width: '80%',
-              maxWidth: '300px'
-            }}>
-              <CircularProgress size={40} color="primary" />
-              <Typography 
-                variant="h6" 
-                sx={{ 
-                  mt: 2,
-                  fontWeight: 'bold',
-                  color: 'primary.main',
-                  animation: 'pulse 1.5s infinite',
-                  '@keyframes pulse': {
-                    '0%': { opacity: 0.7 },
-                    '50%': { opacity: 1 },
-                    '100%': { opacity: 0.7 },
-                  }
-                }}
-              >
-                {loadingMessage}
-              </Typography>
-            </Box>
+            <CircularProgress />
+            <Typography>{loadingMessage}</Typography>
           </Box>
         )}
         
         {/* Tabs */}
-        <Tabs 
-          value={tabValue} 
-          onChange={handleTabChange}
-          variant="fullWidth"
-        >
-          <Tab label="Upload Resume" disabled={!isOnLinkedIn} />
-          <Tab label="Job Rankings" disabled={!isOnLinkedIn || !resumeUploaded} />
-        </Tabs>
+        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
+          <Tabs 
+            value={tabValue} 
+            onChange={handleTabChange}
+            variant="fullWidth"
+          >
+            <Tab label="Upload Resume" />
+            <Tab label="Job Rankings" />
+          </Tabs>
+        </Box>
         
         {/* Tab panels */}
         <Box sx={{ 

@@ -18,9 +18,18 @@ chrome.runtime.onInstalled.addListener(() => {
   
   // Clear any existing state
   chrome.storage.local.set({
-    resumeData: null,
     jobListings: [],
     jobRankings: []
+  });
+  
+  // Don't clear resume data - instead try to load it if available
+  chrome.storage.local.get(['resumeData'], (result) => {
+    if (result && result.resumeData) {
+      console.log('Found existing resume data in storage, loading it');
+      resumeData = result.resumeData;
+    } else {
+      console.log('No existing resume data found in storage');
+    }
   });
 });
 
@@ -79,30 +88,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       break;
       
     case 'MATCH_JOBS':
-      // Extract pagination parameters if provided
       const options = {
         start: message.start || 0,
         limit: message.limit || 10,
-        displayLimit: message.displayLimit || null,
-        requiredLanguages: message.requiredLanguages || ['en']
+        displayLimit: message.displayLimit || null
       };
       handleJobMatching(sendResponse, options);
       break;
       
     case 'LOAD_NEXT_PAGE_JOBS':
-      handleLoadNextPageJobs(sendResponse);
+      handleLoadNextPageJobs(message, sendResponse);
       break;
       
     case 'GET_RESUME_STATUS':
-      // Validate resume data before responding
       let isResumeValid = false;
       let resumeStatus = {};
       
       if (resumeData) {
         isResumeValid = true;
-        console.log('Resume data is available');
         
-        // Create a safe representation of resume data for logging
         let safeResumeData = { type: typeof resumeData };
         if (typeof resumeData === 'object' && resumeData !== null) {
           safeResumeData.hasText = !!resumeData.text;
@@ -112,16 +116,17 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           safeResumeData.length = resumeData.length;
         }
         
-        console.log('Resume data format:', safeResumeData);
         resumeStatus = { format: safeResumeData };
-      } else {
-        console.log('No resume data available');
       }
       
       sendResponse({ 
         resumeUploaded: isResumeValid,
         resumeStatus: resumeStatus
       });
+      break;
+      
+    case 'NEXT_PAGE_SUCCESS':
+      handleNextPageSuccess(message);
       break;
       
     default:
@@ -316,16 +321,26 @@ async function handleJobMatching(sendResponse, options = {}) {
       return;
     }
     
+    // First ensure we have resume data before proceeding
+    try {
+      await ensureResumeData();
+      console.log('Resume data confirmed available for job matching');
+    } catch (resumeError) {
+      console.error('Resume data error:', resumeError);
+      sendResponse({ success: false, error: resumeError.message });
+      return;
+    }
+    
     // Extract pagination parameters
-    const { start = 0, limit = 10, displayLimit = null, requiredLanguages = ['en'] } = options;
-    console.log(`Job matching request with parameters: start=${start}, limit=${limit}, displayLimit=${displayLimit}, requiredLanguages=${requiredLanguages}`);
+    const { start = 0, limit = 10, displayLimit = null } = options;
+    console.log(`Job matching request with parameters: start=${start}, limit=${limit}, displayLimit=${displayLimit}`);
     
     // When limit is set to the full job list length, we'll process all jobs
     if (limit > 10) {
       console.log(`Will analyze all available jobs (up to ${limit}) from the backend`);
     }
     
-    const results = await matchJobs(start, limit, requiredLanguages);
+    const results = await matchJobs(start, limit);
     console.log(`Successfully matched ${results.rankings.length} jobs with resume`);
     
     // If we have pagination details, log them
@@ -345,7 +360,7 @@ async function handleJobMatching(sendResponse, options = {}) {
 }
 
 // Match jobs with the resume by calling the backend API
-async function matchJobs(start = 0, limit = 10, requiredLanguages = ['en']) {
+async function matchJobs(start = 0, limit = 10) {
   // Set flag to prevent multiple simultaneous matching requests
   if (isMatchingJobs) {
     console.log('Job matching already in progress, skipping');
@@ -355,11 +370,8 @@ async function matchJobs(start = 0, limit = 10, requiredLanguages = ['en']) {
   isMatchingJobs = true;
   
   try {
-    // Validate resume data
-    if (!resumeData) {
-      console.error('No resume data available for job matching');
-      throw new Error('No resume data available');
-    }
+    // Ensure resume data is available using our helper
+    await ensureResumeData();
     
     // Log resume data format for debugging
     console.log(`Resume data type: ${typeof resumeData}`);
@@ -425,12 +437,8 @@ async function matchJobs(start = 0, limit = 10, requiredLanguages = ['en']) {
       jobs: jobsForBackend,
       // Add start and limit for backend information, even though we're sending all jobs
       start: start,
-      limit: limit,
-      requiredLanguages: requiredLanguages // Add the requiredLanguages parameter
+      limit: limit
     };
-    
-    // Log selected languages for debugging
-    console.log('Including required languages in job match request:', requiredLanguages);
     
     // Normalize the resume data to ensure it's in the proper format.
     // Backend may expect either a string, object with text property, or object with keywords
@@ -456,8 +464,7 @@ async function matchJobs(start = 0, limit = 10, requiredLanguages = ['en']) {
         resumeDataType: typeof requestData.resumeData,
         resumeDataPresent: !!requestData.resumeData, 
         resumePresent: !!requestData.resume,
-        jobsCount: requestData.jobs.length,
-        requiredLanguages: requestData.requiredLanguages
+        jobsCount: requestData.jobs.length
       })
     );
     
@@ -480,19 +487,12 @@ async function matchJobs(start = 0, limit = 10, requiredLanguages = ['en']) {
     const data = await response.json();
     console.log('Received job matching results:', data);
     
-    if (!data.rankings || !Array.isArray(data.rankings)) {
-      console.error('API did not return valid rankings array:', data);
-      throw new Error('Invalid response format from API');
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to match jobs');
     }
     
     // Update global jobRankings array
-    if (start === 0) {
-      // Replace all rankings if this is the first batch
-      jobRankings = data.rankings;
-    } else {
-      // Append to existing rankings if this is a subsequent batch
-      jobRankings = [...jobRankings, ...data.rankings];
-    }
+    jobRankings = data.rankings;
     
     // Store rankings in local storage
     chrome.storage.local.set({ jobRankings });
@@ -526,21 +526,43 @@ async function matchJobs(start = 0, limit = 10, requiredLanguages = ['en']) {
 }
 
 // Handle loading jobs from the next page of LinkedIn search results
-async function handleLoadNextPageJobs(sendResponse) {
+async function handleLoadNextPageJobs(message, sendResponse) {
   try {
     console.log('Processing request to load jobs from the next LinkedIn page...');
     
-    // We'll clear current job listings and rankings to start fresh
+    // We'll clear current job listings and rankings but keep resume data
     jobListings = [];
     jobRankings = [];
+    
+    // Make sure we have the resume data before proceeding
+    try {
+      await ensureResumeData();
+      console.log('Resume data confirmed available for next page navigation');
+    } catch (resumeError) {
+      console.error('Resume data error before page navigation:', resumeError);
+      sendResponse({ 
+        success: false, 
+        error: resumeError.message
+      });
+      return;
+    }
+    
+    // Only clear job-related data, not resume data
     chrome.storage.local.set({ jobListings: [], jobRankings: [] });
+    
+    // Make sure resume data is saved to storage for persistence
+    chrome.storage.local.set({ resumeData });
+    console.log('Resume data saved to storage for persistence during page navigation');
     
     // Request content script to navigate to the next page and extract jobs
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
         chrome.tabs.sendMessage(
           tabs[0].id,
-          { action: 'LOAD_NEXT_PAGE_JOBS' },
+          { 
+            action: 'LOAD_NEXT_PAGE_JOBS',
+            suppressScrolling: message.suppressScrolling // Pass this flag to content script
+          },
           (response) => {
             if (chrome.runtime.lastError) {
               console.error('Error requesting next page jobs:', chrome.runtime.lastError);
@@ -584,4 +606,63 @@ async function handleLoadNextPageJobs(sendResponse) {
       error: `Failed to load next page jobs: ${error.message}` 
     });
   }
+}
+
+// Helper function to ensure resume data is available
+async function ensureResumeData() {
+  // If we already have resume data in memory, return it
+  if (resumeData) {
+    return resumeData;
+  }
+  
+  // Otherwise, try to load from storage
+  console.log('Resume data not found in memory, loading from storage...');
+  try {
+    const storageData = await new Promise(resolve => {
+      chrome.storage.local.get(['resumeData'], resolve);
+    });
+    
+    if (storageData && storageData.resumeData) {
+      console.log('Successfully loaded resume data from storage');
+      resumeData = storageData.resumeData;
+      return resumeData;
+    } else {
+      console.error('No resume data found in storage');
+      throw new Error('Resume data not available. Please upload your resume first.');
+    }
+  } catch (error) {
+    console.error('Error retrieving resume data:', error);
+    throw error;
+  }
+}
+
+// Make the NEXT_PAGE_SUCCESS handler better - this is called from the content script
+// when it successfully navigates and extracts jobs from the next page
+function handleNextPageSuccess(message) {
+  // Ensure we have the jobListings array
+  if (!message.data || !message.data.jobCount) {
+    console.error('Invalid NEXT_PAGE_SUCCESS message, missing job data');
+    return;
+  }
+  
+  // Make sure resume data is saved again for extra safety
+  if (resumeData) {
+    chrome.storage.local.set({ resumeData });
+    console.log('Re-saved resume data to storage after successful page navigation');
+  }
+  
+  // Reset pagination state to ensure consistent behavior with first page
+  console.log('Resetting pagination state to ensure we only show first 10 jobs initially');
+  const displayLimit = 10; // Only show first 10 jobs initially
+  
+  // Reset the stored rankings in local storage to ensure proper pagination
+  chrome.storage.local.set({ 
+    allJobRankings: jobRankings,
+    currentDisplayIndex: displayLimit
+  }, () => {
+    console.log(`Reset pagination: Set currentDisplayIndex to ${displayLimit}`);
+    
+    // We don't need to do anything else here as the message handler in App.tsx
+    // will automatically trigger job matching with the correct display limit
+  });
 }

@@ -294,49 +294,462 @@ function sendJobsToBackground(jobListings) {
 }
 
 // Function to navigate to the next page of LinkedIn jobs
-function navigateToNextJobPage() {
+function navigateToNextJobPage(suppressScrolling = false) {
   console.log('Attempting to navigate to the next page of job listings...');
+  console.log(`Suppress additional scrolling parameter received: ${suppressScrolling}`);
+  // Override the suppressScrolling parameter to always ensure scrolling happens
+  suppressScrolling = false;
+  console.log(`Override applied - will perform scrolling: suppressScrolling = ${suppressScrolling}`);
 
   try {
-    // Look for pagination next button
-    const nextButtonSelectors = [
-      'button.artdeco-pagination__button--next',
-      'li.artdeco-pagination__button--next button',
-      'button[aria-label*="Next"]',
-      'button[data-test-pagination-page-btn="next"]',
-      '.artdeco-pagination__button--next'
-    ];
-
+    // Variables used by multiple approaches
+    let currentPage = 1;
     let nextButton = null;
-
-    // Try each selector until we find the next button
-    for (const selector of nextButtonSelectors) {
-      nextButton = document.querySelector(selector);
-      if (nextButton) {
-        console.log(`Found next page button with selector: ${selector}`);
-        break;
+    
+    // APPROACH 0: First, try the exact button the user identified
+    nextButton = document.querySelector('button[aria-label="View next page"], button.jobs-search-pagination__button--next');
+    
+    if (nextButton) {
+      console.log('Found next page button using exact aria-label or class');
+      
+      // Try to extract current page from pagination if possible
+      const activePaginationItem = document.querySelector('.artdeco-pagination__indicator--number.active, .artdeco-pagination__indicator.active, [aria-current="true"]');
+      if (activePaginationItem) {
+        const pageText = activePaginationItem.textContent.trim();
+        const pageNumber = parseInt(pageText);
+        if (!isNaN(pageNumber)) {
+          currentPage = pageNumber;
+          console.log(`Current page from pagination: ${currentPage}`);
+        }
+      }
+      
+      // Proceed to clicking this exact button
+      console.log('Clicking specific next page button...');
+      try {
+        nextButton.click();
+        console.log('Successfully clicked Next button');
+        
+        // Process after successful navigation
+        handleAfterClick(currentPage, suppressScrolling);
+        return true;
+      } catch (clickError) {
+        console.error('Error clicking specific Next button:', clickError);
+        // Fall through to other approaches
+        nextButton = null; // Reset for other approaches
       }
     }
-
+    
+    // APPROACH 0.5: Try finding the button with SVG icon
     if (!nextButton) {
-      console.log('No next page button found - may be on the last page');
+      console.log('Trying to find Next button with SVG chevron-right icon...');
+      // Look for buttons with the chevron-right-small SVG icon
+      const buttonsWithSVG = Array.from(document.querySelectorAll('button'));
+      
+      const nextButtons = buttonsWithSVG.filter(btn => {
+        // Check for SVG with data-test-icon="chevron-right-small"
+        const svgIcon = btn.querySelector('svg[data-test-icon="chevron-right-small"]');
+        // Check if button text contains "Next"
+        const hasNextText = btn.textContent.trim().toLowerCase().includes('next');
+        return svgIcon || hasNextText;
+      });
+      
+      if (nextButtons.length > 0) {
+        nextButton = nextButtons[0];
+        console.log('Found Next button with SVG icon');
+        
+        try {
+          nextButton.click();
+          console.log('Successfully clicked Next button with SVG');
+          handleAfterClick(currentPage, suppressScrolling);
+          return true;
+        } catch (clickError) {
+          console.error('Error clicking Next button with SVG:', clickError);
+          nextButton = null; // Reset for other approaches
+        }
+      }
+    }
+    
+    // If the specific button approach fails, continue with remaining approaches
+    // APPROACH 1: Try the standard pagination selectors
+    let activePageElement = document.querySelector('.artdeco-pagination__indicator--number.active.selected');
+    
+    if (activePageElement) {
+      console.log('Found active page element with standard selector');
+      const currentPageBtn = activePageElement.querySelector('button');
+      currentPage = currentPageBtn ? parseInt(currentPageBtn.querySelector('span').textContent) : 1;
+      console.log(`Current page: ${currentPage}`);
+      
+      // Try to find the next page button with the standard selector
+      const nextPageElement = document.querySelector(`[data-test-pagination-page-btn="${currentPage + 1}"]`);
+      if (nextPageElement) {
+        nextButton = nextPageElement.querySelector('button');
+      }
+    }
+    
+    // APPROACH 2: If standard approach failed, try alternative selectors for pagination
+    if (!nextButton) {
+      console.log('Standard selector failed, trying alternative pagination selectors');
+      
+      // Try to find any active page indicator with various selectors
+      const possibleActiveSelectors = [
+        '.artdeco-pagination__indicator.active',
+        '.artdeco-pagination__indicator.selected',
+        '.artdeco-pagination__indicator--number.active',
+        '.active[role="button"]',
+        '[aria-current="true"]',
+        '.selected[role="button"]',
+        '.artdeco-pagination li.active',
+        '.artdeco-pagination li.selected',
+        '.pagination li.active',
+        '.pagination li.selected',
+        '.jobs-search-results-list__pagination li.active',
+        '.jobs-search-results-list__pagination li.selected'
+      ];
+      
+      for (const selector of possibleActiveSelectors) {
+        const element = document.querySelector(selector);
+        if (element) {
+          activePageElement = element;
+          console.log(`Found active page element with alternative selector: ${selector}`);
+          
+          // Try to extract the current page number
+          const pageText = element.textContent.trim();
+          const pageNumber = parseInt(pageText);
+          if (!isNaN(pageNumber)) {
+            currentPage = pageNumber;
+            console.log(`Current page from alternative selector: ${currentPage}`);
+          }
+          break;
+        }
+      }
+      
+      // APPROACH 3: Look for "Next" button directly
+      console.log('Looking for Next button directly...');
+      const nextButtonSelectors = [
+        '.artdeco-pagination__button--next',
+        'button[aria-label="Next"]',
+        'button.next',
+        'li.next button',
+        'button[data-control-name="pagination_right"]',
+        'button.artdeco-pagination__button--next',
+        'button.artdeco-pagination__button[data-direction="next"]',
+        // Try to find the button by its text content
+        'button:not([disabled]):-webkit-any(:has(span:contains("Next")), :contains("Next"))',
+        // General next arrows
+        'button.artdeco-pagination__button:not([disabled])[aria-label*="Next"]',
+        // Look for any right arrow icon
+        'button:not([disabled]) svg[data-test-icon="arrow-right-small"]',
+        'button:not([disabled]) .artdeco-icon[type="arrow-right-small"]',
+        'button:not([disabled]) i[aria-label*="next"]'
+      ];
+      
+      for (const selector of nextButtonSelectors) {
+        try {
+          const elements = document.querySelectorAll(selector);
+          if (elements && elements.length > 0) {
+            nextButton = elements[0];
+            console.log(`Found Next button with selector: ${selector}`);
+            break;
+          }
+        } catch (error) {
+          // Some complex selectors might not be supported, continue to the next
+          console.log(`Selector error: ${error.message}, trying next selector`);
+        }
+      }
+      
+      // APPROACH 4: Find any button after the active page
+      if (!nextButton && activePageElement) {
+        console.log('Looking for any button after the active page...');
+        
+        // Find the pagination container
+        let paginationContainer = null;
+        let current = activePageElement;
+        
+        // Walk up to find the pagination container
+        while (current && current.parentElement) {
+          current = current.parentElement;
+          if (current.classList.contains('artdeco-pagination') || 
+              current.querySelector('li.active') || 
+              current.querySelector('li.selected')) {
+            paginationContainer = current;
+            break;
+          }
+          
+          // Prevent infinite loop
+          if (current === document.body) break;
+        }
+        
+        if (paginationContainer) {
+          console.log('Found pagination container, looking for next button');
+          
+          // Find all buttons in the pagination
+          const allButtons = Array.from(paginationContainer.querySelectorAll('button:not([disabled])'));
+          
+          // Find the index of the active button
+          const activeButtonIndex = allButtons.findIndex(btn => {
+            return btn.closest('li')?.classList.contains('active') || 
+                   btn.closest('li')?.classList.contains('selected') ||
+                   btn.classList.contains('active') ||
+                   btn.classList.contains('selected') ||
+                   btn.parentElement?.classList.contains('active') ||
+                   btn.parentElement?.classList.contains('selected') ||
+                   btn.getAttribute('aria-current') === 'true';
+          });
+          
+          if (activeButtonIndex !== -1 && activeButtonIndex < allButtons.length - 1) {
+            nextButton = allButtons[activeButtonIndex + 1];
+            console.log('Found next button by position in pagination');
+          }
+        }
+      }
+    }
+    
+    // APPROACH 5: Last resort - find ANY button that looks like a "Next" button
+    if (!nextButton) {
+      console.log('Last resort: scanning all buttons for Next indicators...');
+      
+      // Get all buttons on the page
+      const allButtons = Array.from(document.querySelectorAll('button:not([disabled])'));
+      
+      // Filter to those that look like "Next" buttons
+      const possibleNextButtons = allButtons.filter(btn => {
+        const text = btn.textContent.toLowerCase();
+        const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+        
+        return (text.includes('next') || ariaLabel.includes('next')) ||
+               btn.querySelector('svg[data-test-icon="arrow-right-small"]') ||
+               btn.querySelector('.artdeco-icon[type="arrow-right-small"]');
+      });
+      
+      if (possibleNextButtons.length > 0) {
+        console.log(`Found ${possibleNextButtons.length} possible Next buttons`);
+        // Use the first one that looks like a "Next" button
+        nextButton = possibleNextButtons[0];
+      }
+    }
+    
+    // Check if we found a next button with any of our approaches
+    if (!nextButton) {
+      console.log('Could not find next page button with any approach');
       return false;
     }
-
-    // Check if the button is disabled
-    if (nextButton.disabled || nextButton.getAttribute('aria-disabled') === 'true') {
-      console.log('Next page button is disabled - on the last page');
-      return false;
+    
+    // Validate that the button is actually clickable
+    console.log('Found next page button, validating clickability...');
+    if (!nextButton || typeof nextButton.click !== 'function') {
+      console.log('Found element is not clickable or does not have a click method');
+      console.log('Element type:', nextButton ? nextButton.tagName : 'null');
+      console.log('Element properties:', nextButton ? Object.keys(nextButton).join(', ') : 'none');
+      
+      // Try to find the closest clickable parent
+      if (nextButton) {
+        console.log('Attempting to find a clickable parent element...');
+        let current = nextButton;
+        let found = false;
+        
+        // Try up to 3 parent levels to find a clickable element
+        for (let i = 0; i < 3; i++) {
+          if (!current || current === document.body) break;
+          
+          current = current.parentElement;
+          if (current && typeof current.click === 'function') {
+            console.log('Found clickable parent element at level', i+1);
+            nextButton = current;
+            found = true;
+            break;
+          }
+        }
+        
+        if (!found) {
+          // If we can't find a clickable parent, try alternate methods
+          console.log('No clickable parent found, attempting to create and dispatch a click event');
+          
+          try {
+            // Try to dispatch a click event
+            const clickEvent = new MouseEvent('click', {
+              view: window,
+              bubbles: true,
+              cancelable: true
+            });
+            
+            const clickResult = nextButton.dispatchEvent(clickEvent);
+            console.log('Dispatched click event, result:', clickResult);
+            
+            // If event dispatching worked, treat this as success
+            if (clickResult) {
+              // Continue with the process as if the click worked
+              handleAfterClick(currentPage, suppressScrolling);
+              return true;
+            }
+          } catch (eventError) {
+            console.error('Error dispatching click event:', eventError);
+          }
+          
+          // Last resort: try to follow the href if it's an anchor
+          if (nextButton.tagName === 'A' && nextButton.href) {
+            console.log('Element is an anchor, navigating to href:', nextButton.href);
+            window.location.href = nextButton.href;
+            
+            // Wait before proceeding
+            setTimeout(() => {
+              handleAfterClick(currentPage, suppressScrolling);
+            }, 2000);
+            
+            return true;
+          }
+          
+          console.error('All navigation attempts failed');
+          return false;
+        }
+      } else {
+        console.error('No valid button element found to click');
+        return false;
+      }
     }
-
+    
+    // Proceed with clicking if we have a valid button
     console.log('Clicking next page button...');
-    nextButton.click();
-
-    // Return true to indicate successful navigation
-    return true;
+    try {
+      nextButton.click();
+      console.log('Successfully clicked next page button');
+      
+      // Process after successful navigation
+      handleAfterClick(currentPage, suppressScrolling);
+      return true;
+    } catch (clickError) {
+      console.error('Error clicking next button:', clickError);
+      
+      // Try one more fallback approach with event dispatching
+      try {
+        console.log('Attempting fallback with event dispatching...');
+        const clickEvent = new MouseEvent('click', {
+          view: window,
+          bubbles: true,
+          cancelable: true
+        });
+        
+        nextButton.dispatchEvent(clickEvent);
+        console.log('Dispatched click event as fallback');
+        
+        // Process after click event
+        handleAfterClick(currentPage, suppressScrolling);
+        return true;
+      } catch (eventError) {
+        console.error('Failed to dispatch click event:', eventError);
+        return false;
+      }
+    }
   } catch (error) {
     console.error('Error navigating to next page:', error);
+    chrome.runtime.sendMessage({
+      action: 'NEXT_PAGE_ERROR',
+      error: 'Failed to navigate to next page: ' + error.message
+    });
     return false;
+  }
+
+  // Helper function to handle logic after clicking next page button
+  function handleAfterClick(currentPage, suppressScrolling) {
+    // Always override suppressScrolling to ensure scrolling happens
+    suppressScrolling = false;
+    console.log(`Override applied in handleAfterClick - will perform scrolling: suppressScrolling = ${suppressScrolling}`);
+    
+    // Wait for the page to load and then automatically analyze jobs
+    console.log('Waiting for page to load before analyzing jobs...');
+    setTimeout(() => {
+      console.log('Starting automatic job analysis after page navigation');
+      
+      // Skip scrolling if suppressScrolling is true (the scrolling is already being done elsewhere)
+      if (suppressScrolling) {
+        // This code branch should never execute now that we're overriding the parameter
+        console.log('Skipping scrolling as requested by caller');
+        console.log('Extracting job listings without additional scrolling...');
+        const jobListings = extractJobListings();
+        
+        if (jobListings && jobListings.length > 0) {
+          console.log(`Extracted ${jobListings.length} jobs, sending to background...`);
+          // Send the extracted jobs to the background script
+          chrome.runtime.sendMessage({
+            action: 'JOB_LISTINGS_EXTRACTED',
+            data: jobListings
+          }, response => {
+            if (chrome.runtime.lastError) {
+              console.error('Error sending job listings to background:', chrome.runtime.lastError);
+              // Notify of error
+              chrome.runtime.sendMessage({
+                action: 'NEXT_PAGE_ERROR',
+                error: 'Failed to analyze jobs on the next page.'
+              });
+            } else {
+              console.log('Successfully analyzed jobs from next page');
+              // Notify of success
+              chrome.runtime.sendMessage({
+                action: 'NEXT_PAGE_SUCCESS',
+                data: {
+                  jobCount: jobListings.length,
+                  currentPage: currentPage + 1
+                }
+              });
+            }
+          });
+        } else {
+          console.error('No jobs found on next page');
+          chrome.runtime.sendMessage({
+            action: 'NEXT_PAGE_ERROR',
+            error: 'No jobs found on the next page.'
+          });
+        }
+      } else {
+        // If not suppressing scrolling, do the normal flow with scrolling
+        // First scroll to load all jobs
+        scrollJobListingsToLoadAll().then(scrollSuccess => {
+          if (scrollSuccess) {
+            console.log('Successfully loaded all jobs, extracting listings...');
+            const jobListings = extractJobListings();
+            
+            if (jobListings && jobListings.length > 0) {
+              console.log(`Extracted ${jobListings.length} jobs, sending to background...`);
+              // Send the extracted jobs to the background script
+              chrome.runtime.sendMessage({
+                action: 'JOB_LISTINGS_EXTRACTED',
+                data: jobListings
+              }, response => {
+                if (chrome.runtime.lastError) {
+                  console.error('Error sending job listings to background:', chrome.runtime.lastError);
+                  // Notify of error
+                  chrome.runtime.sendMessage({
+                    action: 'NEXT_PAGE_ERROR',
+                    error: 'Failed to analyze jobs on the next page.'
+                  });
+                } else {
+                  console.log('Successfully analyzed jobs from next page');
+                  // Notify of success
+                  chrome.runtime.sendMessage({
+                    action: 'NEXT_PAGE_SUCCESS',
+                    data: {
+                      jobCount: jobListings.length,
+                      currentPage: currentPage + 1
+                    }
+                  });
+                }
+              });
+            } else {
+              console.error('No jobs found on next page');
+              chrome.runtime.sendMessage({
+                action: 'NEXT_PAGE_ERROR',
+                error: 'No jobs found on the next page.'
+              });
+            }
+          } else {
+            console.error('Failed to load all jobs on next page');
+            chrome.runtime.sendMessage({
+              action: 'NEXT_PAGE_ERROR',
+              error: 'Failed to load jobs on the next page.'
+            });
+          }
+        });
+      }
+    }, 2000); // Wait for page load
   }
 }
 
@@ -689,31 +1102,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         message: 'Clearing existing job data before new page load'
       });
       
+      // Always set suppressScrolling to false to ensure we always scroll
+      const suppressScrolling = false;
+      console.log(`Always enabling scrolling on next page: suppressScrolling = ${suppressScrolling}`);
+      
       // Navigate to the next page
       console.log('Step 1: Navigating to next page');
-      const success = navigateToNextJobPage();
+      const success = navigateToNextJobPage(suppressScrolling);
 
       if (success) {
         // Wait for the new page to load
         console.log('Step 1 complete: Navigation successful, waiting for page to load');
-        setTimeout(() => {
-          // After page loads, scroll to load all job cards
-          console.log('Step 2: Scrolling to load all job listings on new page');
-          scrollJobListingsToLoadAll().then(scrollSuccess => {
-            console.log(`Step 2 complete: Next page scroll completed with status: ${scrollSuccess}`);
-            
-            // After scrolling completes, extract the job listings
-            console.log('Step 3: Extracting job listings from new page');
-            const jobListings = extractJobListings();
-            console.log(`Step 3 complete: Extracted ${jobListings.length} job listings from next page after scrolling`);
-            
-            // Send the job listings back to the popup
-            console.log('Step 4: Sending extracted job listings for analysis');
-            sendResponse({ success: true, jobListings });
-          });
-        }, 2000); // Wait 2 seconds for page to load
-
-        return true; // Keep message channel open for async response
+        
+        // We don't need the rest of this handler as the navigateToNextJobPage function
+        // will now handle scrolling, extraction, and sending the NEXT_PAGE_SUCCESS message
+        sendResponse({ success: true });
       } else {
         sendResponse({ success: false, error: 'Could not navigate to next page' });
       }
