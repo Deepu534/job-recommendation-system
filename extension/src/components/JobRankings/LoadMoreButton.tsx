@@ -6,14 +6,18 @@ import {
 } from '@mui/material';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 
-interface LoadMoreProps {
-  onLoadMore: (() => void) | undefined;
-  isLoading: boolean;
-  remainingJobs: number;
-  totalJobs: number;
+export interface LoadMoreProps {
+  params: {
+    onLoadMore: (() => void) | undefined;
+    isLoading: boolean;
+    remainingJobs: number;
+    totalJobs: number;
+  }
 }
 
-function LoadMoreButton({ onLoadMore, isLoading, remainingJobs, totalJobs }: LoadMoreProps) {
+function LoadMoreButton({ params }: LoadMoreProps) {
+  const { onLoadMore, isLoading, remainingJobs, totalJobs } = params;
+  
   if (!onLoadMore) return null;
   
   return (

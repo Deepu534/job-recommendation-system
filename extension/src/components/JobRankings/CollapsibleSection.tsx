@@ -8,23 +8,27 @@ import {
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 
-interface CollapsibleSectionProps {
-  sectionTitle: string;
-  isExpanded: boolean;
-  onToggle: (e: React.MouseEvent) => void;
-  items: string[];
-  chipColor: "primary" | "secondary" | "default" | "error" | "info" | "success" | "warning";
-  chipIcon?: React.ReactElement;
+export interface CollapsibleSectionProps {
+  params: {
+    sectionTitle: string;
+    isExpanded: boolean;
+    onToggle: (e: React.MouseEvent) => void;
+    items: string[];
+    chipColor: "primary" | "secondary" | "default" | "error" | "info" | "success" | "warning";
+    chipIcon?: React.ReactElement;
+  }
 }
 
-function CollapsibleSection({ 
-  sectionTitle, 
-  isExpanded, 
-  onToggle, 
-  items, 
-  chipColor, 
-  chipIcon 
-}: CollapsibleSectionProps) {
+function CollapsibleSection({ params }: CollapsibleSectionProps) {
+  const { 
+    sectionTitle, 
+    isExpanded, 
+    onToggle, 
+    items, 
+    chipColor, 
+    chipIcon 
+  } = params;
+  
   if (!items || items.length === 0) {
     return null;
   }

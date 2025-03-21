@@ -4,15 +4,16 @@ import {
   Typography, 
 } from '@mui/material';
 
-interface JobRankingsHeaderProps { 
-  rankingsCount: number; 
-  hasMoreJobs: boolean;
+export interface JobRankingsHeaderProps { 
+  params: {
+    rankingsCount: number; 
+    hasMoreJobs: boolean;
+  }
 }
 
-function JobRankingsHeader({ 
-  rankingsCount, 
-  hasMoreJobs 
-}: JobRankingsHeaderProps) {
+function JobRankingsHeader({ params }: JobRankingsHeaderProps) {
+  const { rankingsCount, hasMoreJobs } = params;
+  
   return (
     <Box sx={{ 
       display: 'flex', 

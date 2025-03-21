@@ -14,23 +14,27 @@ import { JobRanking } from '../JobRankings';
 import { formatScore, getScoreColor, getCompanyInitials } from '../../utils/jobFormatters';
 import CollapsibleSection from './CollapsibleSection';
 
-interface JobCardProps {
-  job: JobRanking;
-  onJobClick: (jobId: string) => void;
-  expandedSkills: Record<string, boolean>;
-  expandedMatching: Record<string, boolean>;
-  toggleSkills: (jobId: string, event: React.MouseEvent) => void;
-  toggleMatching: (jobId: string, event: React.MouseEvent) => void;
+export interface JobCardProps {
+  params: {
+    job: JobRanking;
+    onJobClick: (jobId: string) => void;
+    expandedSkills: Record<string, boolean>;
+    expandedMatching: Record<string, boolean>;
+    toggleSkills: (params: { jobId: string; event: React.MouseEvent }) => void;
+    toggleMatching: (params: { jobId: string; event: React.MouseEvent }) => void;
+  }
 }
 
-function JobCard({ 
-  job, 
-  onJobClick, 
-  expandedSkills, 
-  expandedMatching, 
-  toggleSkills, 
-  toggleMatching 
-}: JobCardProps) {
+function JobCard({ params }: JobCardProps) {
+  const { 
+    job, 
+    onJobClick, 
+    expandedSkills, 
+    expandedMatching, 
+    toggleSkills, 
+    toggleMatching 
+  } = params;
+  
   return (
     <Paper 
       elevation={1}
@@ -108,20 +112,24 @@ function JobCard({
         
         {/* Key skills section */}
         <CollapsibleSection 
-          sectionTitle="Key Skills Required:"
-          isExpanded={!!expandedSkills[job.id]}
-          onToggle={(e) => toggleSkills(job.id, e)}
-          items={job.keySkills || []}
-          chipColor="secondary"
+          params={{
+            sectionTitle: "Key Skills Required:",
+            isExpanded: !!expandedSkills[job.id],
+            onToggle: (e) => toggleSkills({ jobId: job.id, event: e }),
+            items: job.keySkills || [],
+            chipColor: "secondary"
+          }}
         />
         
         {/* Matching keywords */}
         <CollapsibleSection 
-          sectionTitle="Your Matching Skills:"
-          isExpanded={!!expandedMatching[job.id]}
-          onToggle={(e) => toggleMatching(job.id, e)}
-          items={job.matchingKeywords || []}
-          chipColor="primary"
+          params={{
+            sectionTitle: "Your Matching Skills:",
+            isExpanded: !!expandedMatching[job.id],
+            onToggle: (e) => toggleMatching({ jobId: job.id, event: e }),
+            items: job.matchingKeywords || [],
+            chipColor: "primary"
+          }}
         />
         
         {/* LinkedIn URL */}

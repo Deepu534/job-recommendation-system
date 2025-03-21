@@ -7,11 +7,15 @@ import {
 import WorkIcon from '@mui/icons-material/Work';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 
-interface EmptyJobsMessageProps {
-  onRefresh: () => void;
+export interface EmptyJobsMessageProps {
+  params: {
+    onRefresh: () => void;
+  }
 }
 
-function EmptyJobsMessage({ onRefresh }: EmptyJobsMessageProps) {
+function EmptyJobsMessage({ params }: EmptyJobsMessageProps) {
+  const { onRefresh } = params;
+  
   return (
     <Box sx={{ 
       textAlign: 'center',

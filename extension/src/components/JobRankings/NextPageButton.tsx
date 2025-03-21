@@ -9,12 +9,16 @@ import {
 } from '@mui/material';
 import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
 
-interface NextPageProps {
-  onLoadNextPage: (() => void) | undefined;
-  isLoading: boolean;
+export interface NextPageProps {
+  params: {
+    onLoadNextPage: (() => void) | undefined;
+    isLoading: boolean;
+  }
 }
 
-function NextPageButton({ onLoadNextPage, isLoading }: NextPageProps) {
+function NextPageButton({ params }: NextPageProps) {
+  const { onLoadNextPage, isLoading } = params;
+  
   if (!onLoadNextPage) return null;
   
   return (

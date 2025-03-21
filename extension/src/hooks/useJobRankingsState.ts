@@ -1,7 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { JobRanking } from '../components/JobRankings';
 
-export function useJobRankingsState(rankings: JobRanking[], hasMoreJobs: boolean) {
+// RORO pattern for hook params
+interface UseJobRankingsStateParams {
+  rankings: JobRanking[];
+  hasMoreJobs: boolean;
+}
+
+export function useJobRankingsState({ rankings, hasMoreJobs }: UseJobRankingsStateParams) {
   // State to track which job's skills sections are expanded
   const [expandedSkills, setExpandedSkills] = useState<Record<string, boolean>>({});
   const [expandedMatching, setExpandedMatching] = useState<Record<string, boolean>>({});
