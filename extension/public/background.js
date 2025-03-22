@@ -66,6 +66,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: true });
       break;
       
+    case 'SET_LOADING_STATE':
+      // Forward the loading state to the popup
+      chrome.runtime.sendMessage({
+        action: 'SET_LOADING_STATE',
+        isLoading: message.isLoading
+      });
+      sendResponse({ success: true });
+      break;
+      
     case 'CLEAR_EXISTING_JOBS':
       // Clear existing job data before new extraction
       console.log('Clearing existing job data before new extraction');

@@ -41,9 +41,9 @@ function LoadMoreButton({ params }: LoadMoreProps) {
         startIcon={isLoading ? <CircularProgress size={20} color="inherit" /> : <KeyboardArrowDownIcon />}
         fullWidth
         sx={{ 
-          maxWidth: '90%', 
-          py: 1.5,
-          fontSize: '1rem',
+          maxWidth: '95%',
+          py: 2,
+          fontSize: '0.95rem',
           fontWeight: 'bold',
           boxShadow: 3,
           '&:hover': {

@@ -18,6 +18,7 @@ export function useJobRankingsState({ rankings, hasMoreJobs }: UseJobRankingsSta
   const [remainingJobs, setRemainingJobs] = useState(0);
   // Ref for the scrollable container
   const scrollContainerRef = useRef<HTMLDivElement | null>(null);
+  const scrollTimeout = useRef<NodeJS.Timeout | null>(null);
   
   // Toggle skills expansion for a job
   const toggleSkills = (jobId: string, event: React.MouseEvent) => {
@@ -69,13 +70,9 @@ export function useJobRankingsState({ rankings, hasMoreJobs }: UseJobRankingsSta
     if (!scrollContainerRef.current) return;
     
     const handleScroll = () => {
-      if (rankings.length === 0) return;
-      
-      // If user is actively scrolling, update loading indicator message
-      chrome.runtime.sendMessage({ 
-        action: 'UPDATE_LOADING_MESSAGE', 
-        message: 'Reading job descriptions...'
-      });
+      // Remove the problematic loading message code
+      // We don't want to show "Reading job descriptions..." when scrolling in the extension
+      // No loading messages needed here as these jobs are already analyzed
     };
     
     const container = scrollContainerRef.current;
@@ -84,6 +81,11 @@ export function useJobRankingsState({ rankings, hasMoreJobs }: UseJobRankingsSta
     return () => {
       if (container) {
         container.removeEventListener('scroll', handleScroll);
+      }
+      
+      // Clear timeout on cleanup
+      if (scrollTimeout.current) {
+        clearTimeout(scrollTimeout.current);
       }
     };
   }, [rankings]);

@@ -14,6 +14,9 @@ export function useLoadingState() {
       if (message.action === 'UPDATE_LOADING_MESSAGE' && message.message) {
         console.log('Received loading message update:', message.message);
         setLoadingMessage(message.message);
+      } else if (message.action === 'SET_LOADING_STATE' && message.isLoading !== undefined) {
+        console.log('Received loading state update:', message.isLoading);
+        setIsLoading(message.isLoading);
       }
     };
     

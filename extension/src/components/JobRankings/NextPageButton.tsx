@@ -26,16 +26,17 @@ function NextPageButton({ params }: NextPageProps) {
       display: 'flex', 
       justifyContent: 'center',
       width: '100%',
-      pt: 1,
-      pb: 1,
+      pt: 2,
+      pb: 2,
       position: 'sticky',
       bottom: 0,
       backgroundColor: 'background.paper',
       zIndex: 1,
       borderTop: '1px solid',
-      borderColor: 'divider'
+      borderColor: 'divider',
+      boxShadow: '0px -4px 12px rgba(0,0,0,0.1)'
     }}>
-      <Stack spacing={1} width="90%">
+      <Stack spacing={1} width="95%">
         <Tooltip 
           title="Navigate to and automatically analyze the next page of LinkedIn job results" 
           placement="top"
@@ -50,8 +51,9 @@ function NextPageButton({ params }: NextPageProps) {
             size="large"
             sx={{ 
               width: '100%',
-              py: 1.5,
-              fontWeight: 'bold'
+              py: 2,
+              fontWeight: 'bold',
+              fontSize: '0.95rem'
             }}
           >
             {isLoading ? 
@@ -74,9 +76,9 @@ function NextPageButton({ params }: NextPageProps) {
               : 'Load & Analyze Next Page'}
           </Button>
         </Tooltip>
-        <Typography variant="caption" color="text.secondary" align="center">
+        {/* <Typography variant="caption" color="text.secondary" align="center">
           This will navigate to the next page and automatically analyze those jobs
-        </Typography>
+        </Typography> */}
       </Stack>
     </Box>
   );

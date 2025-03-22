@@ -75,6 +75,9 @@ export function useJobRankings({
         setIsLoadingNextPage(false);
         setError(null);
         
+        // Ensure loading message is properly configured for next page
+        resetAndActivateLoadingMessage();
+        
         // Automatically trigger job matching with the new jobs
         console.log('Automatically triggering job matching after next page navigation');
         setIsLoading(true);
@@ -89,28 +92,56 @@ export function useJobRankings({
           setIsLoading(false);
           
           if (matchResponse && matchResponse.success && matchResponse.jobRankings) {
-            setJobRankings(matchResponse.jobRankings);
-            setHasMoreJobs(matchResponse.pagination?.hasMore || false);
+            // Check if we have more than 10 results
+            const totalResults = matchResponse.jobRankings.length;
+            const initialBatchSize = 10;
+            const hasMore = totalResults > initialBatchSize;
             
-            // Explicitly set pagination state to ensure consistent behavior
-            console.log('Explicitly ensuring pagination state is consistent with first page');
-            chrome.storage.local.get(['allJobRankings'], (result) => {
-              const allRankings = result.allJobRankings || [];
-              if (allRankings.length > 10) {
-                console.log(`Setting hasMoreJobs to true, as we have ${allRankings.length} total rankings with 10 displayed`);
-                setHasMoreJobs(true);
-              }
+            console.log(`Received ${totalResults} total ranked jobs from next page after language filtering`);
+            
+            // Only show the top 10 jobs initially
+            setJobRankings(matchResponse.jobRankings.slice(0, initialBatchSize));
+            console.log(`Showing top ${initialBatchSize} jobs out of ${totalResults} total ranked jobs from next page`);
+            
+            // We'll have more jobs to show if the total is greater than initial batch size
+            setHasMoreJobs(hasMore);
+            console.log('Setting hasMoreJobs for next page to:', hasMore);
+            
+            // Store all rankings in storage for pagination
+            chrome.storage.local.set({ 
+              allJobRankings: matchResponse.jobRankings,
+              currentDisplayIndex: initialBatchSize
+            }, () => {
+              console.log(`Stored all ${totalResults} ranked jobs in local storage for pagination. Has more: ${hasMore}`);
             });
           } else if (matchResponse && matchResponse.error) {
             setError(`Error matching jobs: ${matchResponse.error}`);
+            
+            // Disable loading message on job matching error
+            chrome.runtime.sendMessage({ 
+              action: 'CONFIGURE_LOADING_MESSAGE', 
+              enabled: false
+            });
           } else {
             setError('Unknown error matching jobs');
+            
+            // Disable loading message on unknown error
+            chrome.runtime.sendMessage({ 
+              action: 'CONFIGURE_LOADING_MESSAGE', 
+              enabled: false
+            });
           }
         });
       } else if (message.action === 'NEXT_PAGE_ERROR' && message.error) {
         console.error('Next page error:', message.error);
         setIsLoadingNextPage(false);
         setError(`Error: ${message.error}`);
+        
+        // Disable loading message on error
+        chrome.runtime.sendMessage({ 
+          action: 'CONFIGURE_LOADING_MESSAGE', 
+          enabled: false
+        });
       }
     };
     
@@ -123,6 +154,31 @@ export function useJobRankings({
     };
   }, [setError, setIsLoading, setLoadingMessage]);
   
+  // Reset and activate loading message system for LinkedIn page content scrolling
+  const resetAndActivateLoadingMessage = () => {
+    // First disable to clear any existing state
+    chrome.runtime.sendMessage({ 
+      action: 'CONFIGURE_LOADING_MESSAGE', 
+      enabled: false
+    });
+    
+    // Then re-enable with proper configuration - NOTE: This is only for LinkedIn page content scrolling
+    // NOT for scrolling in the extension UI
+    setTimeout(() => {
+      chrome.runtime.sendMessage({ 
+        action: 'CONFIGURE_LOADING_MESSAGE', 
+        enabled: true,
+        defaultMessage: 'Processing job descriptions...'
+      });
+      
+      // Show initial message
+      chrome.runtime.sendMessage({ 
+        action: 'UPDATE_LOADING_MESSAGE', 
+        message: 'Processing job descriptions...'
+      });
+    }, 100);
+  };
+
   // Request job matching
   const handleMatchJobs = () => {
     // Prevent multiple simultaneous job matching requests
@@ -139,6 +195,9 @@ export function useJobRankings({
     // Reset pagination
     currentBatchRef.current = 0;
     
+    // Reset and activate loading message system
+    resetAndActivateLoadingMessage();
+    
     // First, make sure we have jobs
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs[0]?.id) {
@@ -149,6 +208,12 @@ export function useJobRankings({
             setIsLoading(false);
             setError('Error communicating with LinkedIn page. Try refreshing the page.');
             isMatchingJobsRef.current = false;
+            
+            // Disable loading message on error
+            chrome.runtime.sendMessage({ 
+              action: 'CONFIGURE_LOADING_MESSAGE', 
+              enabled: false
+            });
             return;
           }
           
@@ -158,6 +223,12 @@ export function useJobRankings({
             setIsLoading(false);
             setError(`Error extracting jobs: ${response.error}`);
             isMatchingJobsRef.current = false;
+            
+            // Disable loading message on error
+            chrome.runtime.sendMessage({ 
+              action: 'CONFIGURE_LOADING_MESSAGE', 
+              enabled: false
+            });
             return;
           }
           
@@ -167,6 +238,12 @@ export function useJobRankings({
             setIsLoading(false);
             setError('No job listings found. Please make sure you are on a LinkedIn jobs search results page.');
             isMatchingJobsRef.current = false;
+            
+            // Disable loading message on error
+            chrome.runtime.sendMessage({ 
+              action: 'CONFIGURE_LOADING_MESSAGE', 
+              enabled: false
+            });
             return;
           }
           
@@ -212,9 +289,21 @@ export function useJobRankings({
             } else if (matchResponse && matchResponse.error) {
               console.error('Error matching jobs:', matchResponse.error);
               setError(`Error matching jobs: ${matchResponse.error}`);
+              
+              // Disable loading message on job matching error
+              chrome.runtime.sendMessage({ 
+                action: 'CONFIGURE_LOADING_MESSAGE', 
+                enabled: false
+              });
             } else {
               console.error('Unknown error matching jobs');
               setError('Failed to match jobs. Make sure both resume and job listings are available.');
+              
+              // Disable loading message on unknown error
+              chrome.runtime.sendMessage({ 
+                action: 'CONFIGURE_LOADING_MESSAGE', 
+                enabled: false
+              });
             }
           });
         });
@@ -295,6 +384,9 @@ export function useJobRankings({
     // Tell the user we're navigating to the next page
     setLoadingMessage('Navigating to next page of job listings...');
     
+    // Reset and activate loading message system for the next page
+    resetAndActivateLoadingMessage();
+    
     chrome.runtime.sendMessage({
       action: 'LOAD_NEXT_PAGE_JOBS',
       suppressScrolling: true // Signal that scrolling is handled by content script
@@ -336,6 +428,17 @@ export function useJobRankings({
       }
     });
   };
+  
+  // Clean up function to properly reset state when unmounting
+  useEffect(() => {
+    return () => {
+      // Disable loading message when component unmounts
+      chrome.runtime.sendMessage({ 
+        action: 'CONFIGURE_LOADING_MESSAGE', 
+        enabled: false
+      });
+    };
+  }, []);
   
   return {
     jobRankings,

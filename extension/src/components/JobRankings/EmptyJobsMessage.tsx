@@ -27,7 +27,9 @@ function EmptyJobsMessage({ params }: EmptyJobsMessageProps) {
         No Jobs Analyzed Yet
       </Typography>
       <Typography variant="body1" align="center" color="text.secondary" paragraph>
-        Upload your resume (if you haven't already) and click "Analyze Jobs" to rank all LinkedIn job listings by their match with your experience and skills.
+        Upload your resume (if you haven't already) and click "Analyze Jobs" to rank all LinkedIn job listings by their match with your experience and skills. <br />
+        <br />
+        Note: Do not close this extension while we are processing your job matches.
       </Typography>
       <Button 
         variant="contained"

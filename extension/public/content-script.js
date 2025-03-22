@@ -4,6 +4,12 @@
 function extractJobListings() {
   console.log('Attempting to extract job listings from LinkedIn...');
 
+  // Update loading message for extraction phase
+  chrome.runtime.sendMessage({ 
+    action: 'UPDATE_LOADING_MESSAGE', 
+    message: 'Extracting job listings...'
+  });
+
   try {
     // Try multiple selectors to find job cards
     const possibleSelectors = [
@@ -648,107 +654,133 @@ function navigateToNextJobPage(suppressScrolling = false) {
     return false;
   }
 
-  // Helper function to handle logic after clicking next page button
+  // Function to handle what happens after navigating to a new page
   function handleAfterClick(currentPage, suppressScrolling) {
     // Always override suppressScrolling to ensure scrolling happens
     suppressScrolling = false;
-    console.log(`Override applied in handleAfterClick - will perform scrolling: suppressScrolling = ${suppressScrolling}`);
     
-    // Wait for the page to load and then automatically analyze jobs
-    console.log('Waiting for page to load before analyzing jobs...');
+    // Make sure we're on the right page - Add a longer delay to ensure the page has time to load
     setTimeout(() => {
       console.log('Starting automatic job analysis after page navigation');
       
-      // Skip scrolling if suppressScrolling is true (the scrolling is already being done elsewhere)
-      if (suppressScrolling) {
-        // This code branch should never execute now that we're overriding the parameter
-        console.log('Skipping scrolling as requested by caller');
-        console.log('Extracting job listings without additional scrolling...');
-        const jobListings = extractJobListings();
-        
-        if (jobListings && jobListings.length > 0) {
-          console.log(`Extracted ${jobListings.length} jobs, sending to background...`);
-          // Send the extracted jobs to the background script
-          chrome.runtime.sendMessage({
-            action: 'JOB_LISTINGS_EXTRACTED',
-            data: jobListings
-          }, response => {
-            if (chrome.runtime.lastError) {
-              console.error('Error sending job listings to background:', chrome.runtime.lastError);
-              // Notify of error
-              chrome.runtime.sendMessage({
-                action: 'NEXT_PAGE_ERROR',
-                error: 'Failed to analyze jobs on the next page.'
-              });
-            } else {
-              console.log('Successfully analyzed jobs from next page');
-              // Notify of success
-              chrome.runtime.sendMessage({
-                action: 'NEXT_PAGE_SUCCESS',
-                data: {
-                  jobCount: jobListings.length,
-                  currentPage: currentPage + 1
-                }
-              });
-            }
+      // Update loading message for page load
+      chrome.runtime.sendMessage({ 
+        action: 'UPDATE_LOADING_MESSAGE', 
+        message: 'New page loaded, preparing to analyze jobs...'
+      });
+      
+      // First scroll to load all jobs
+      scrollJobListingsToLoadAll().then(scrollSuccess => {
+        if (scrollSuccess) {
+          console.log('Successfully loaded all jobs, extracting listings...');
+          
+          // Update loading message for extraction
+          chrome.runtime.sendMessage({ 
+            action: 'UPDATE_LOADING_MESSAGE', 
+            message: 'Extracting job listings...'
           });
-        } else {
-          console.error('No jobs found on next page');
-          chrome.runtime.sendMessage({
-            action: 'NEXT_PAGE_ERROR',
-            error: 'No jobs found on the next page.'
-          });
-        }
-      } else {
-        // If not suppressing scrolling, do the normal flow with scrolling
-        // First scroll to load all jobs
-        scrollJobListingsToLoadAll().then(scrollSuccess => {
-          if (scrollSuccess) {
-            console.log('Successfully loaded all jobs, extracting listings...');
-            const jobListings = extractJobListings();
+          
+          const jobListings = extractJobListings();
+          
+          if (jobListings && jobListings.length > 0) {
+            console.log(`Extracted ${jobListings.length} jobs, sending to background...`);
             
-            if (jobListings && jobListings.length > 0) {
-              console.log(`Extracted ${jobListings.length} jobs, sending to background...`);
-              // Send the extracted jobs to the background script
-              chrome.runtime.sendMessage({
-                action: 'JOB_LISTINGS_EXTRACTED',
-                data: jobListings
-              }, response => {
-                if (chrome.runtime.lastError) {
-                  console.error('Error sending job listings to background:', chrome.runtime.lastError);
-                  // Notify of error
-                  chrome.runtime.sendMessage({
-                    action: 'NEXT_PAGE_ERROR',
-                    error: 'Failed to analyze jobs on the next page.'
-                  });
-                } else {
-                  console.log('Successfully analyzed jobs from next page');
-                  // Notify of success
-                  chrome.runtime.sendMessage({
-                    action: 'NEXT_PAGE_SUCCESS',
-                    data: {
-                      jobCount: jobListings.length,
-                      currentPage: currentPage + 1
-                    }
-                  });
-                }
+            // Update loading message for sending to backend
+            chrome.runtime.sendMessage({ 
+              action: 'UPDATE_LOADING_MESSAGE', 
+              message: `Sending ${jobListings.length} jobs for analysis...`
+            });
+            
+            // Send the extracted jobs to the background script
+            chrome.runtime.sendMessage({
+              action: 'JOB_LISTINGS_EXTRACTED',
+              data: jobListings
+            }, response => {
+              // Update loading message to show we're now processing job matches
+              // This is the key fix - add a message showing we're processing jobs
+              chrome.runtime.sendMessage({ 
+                action: 'UPDATE_LOADING_MESSAGE', 
+                message: `Processing ${jobListings.length} job matches...`
               });
-            } else {
-              console.error('No jobs found on next page');
-              chrome.runtime.sendMessage({
-                action: 'NEXT_PAGE_ERROR',
-                error: 'No jobs found on the next page.'
-              });
-            }
+              
+              if (chrome.runtime.lastError) {
+                console.error('Error sending job listings to background:', chrome.runtime.lastError);
+                // Notify of error
+                chrome.runtime.sendMessage({
+                  action: 'NEXT_PAGE_ERROR',
+                  error: 'Failed to analyze jobs on the next page.'
+                });
+                
+                // Update loading message with error
+                chrome.runtime.sendMessage({ 
+                  action: 'UPDATE_LOADING_MESSAGE', 
+                  message: 'Error sending jobs for analysis'
+                });
+                
+                // Reset loading state
+                chrome.runtime.sendMessage({
+                  action: 'SET_LOADING_STATE',
+                  isLoading: false
+                });
+              } else {
+                console.log('Successfully analyzed jobs from next page');
+                // Notify of success
+                chrome.runtime.sendMessage({
+                  action: 'NEXT_PAGE_SUCCESS',
+                  data: {
+                    jobCount: jobListings.length,
+                    currentPage: currentPage + 1
+                  }
+                });
+                
+                // Update loading message with success
+                chrome.runtime.sendMessage({ 
+                  action: 'UPDATE_LOADING_MESSAGE', 
+                  message: `Successfully analyzed ${jobListings.length} jobs from page ${currentPage + 1}`
+                });
+              }
+            });
           } else {
-            console.error('Failed to load all jobs on next page');
+            console.error('No jobs found on next page');
+            
+            // Update loading message with error
+            chrome.runtime.sendMessage({ 
+              action: 'UPDATE_LOADING_MESSAGE', 
+              message: 'No jobs found on this page'
+            });
+            
+            // Reset loading state
+            chrome.runtime.sendMessage({
+              action: 'SET_LOADING_STATE',
+              isLoading: false
+            });
+            
             chrome.runtime.sendMessage({
               action: 'NEXT_PAGE_ERROR',
-              error: 'Failed to load jobs on the next page.'
+              error: 'No jobs found on the next page.'
             });
           }
-        });
-      }
+        } else {
+          console.error('Failed to load all jobs on next page');
+          
+          // Update loading message with error
+          chrome.runtime.sendMessage({ 
+            action: 'UPDATE_LOADING_MESSAGE', 
+            message: 'Failed to load jobs on this page'
+          });
+          
+          // Reset loading state
+          chrome.runtime.sendMessage({
+            action: 'SET_LOADING_STATE',
+            isLoading: false
+          });
+          
+          chrome.runtime.sendMessage({
+            action: 'NEXT_PAGE_ERROR',
+            error: 'Failed to load jobs on the next page.'
+          });
+        }
+      });
     }, 2000); // Wait for page load
   }
 }
@@ -757,6 +789,25 @@ function navigateToNextJobPage(suppressScrolling = false) {
 function scrollJobListingsToLoadAll() {
   return new Promise((resolve) => {
     console.log('Starting to scroll job listings to load all lazy-loaded content');
+
+    // Send a loading message update to show the loading indicator
+    chrome.runtime.sendMessage({ 
+      action: 'CONFIGURE_LOADING_MESSAGE', 
+      enabled: true,
+      defaultMessage: 'Reading job descriptions...'
+    });
+    
+    // Show initial message immediately
+    chrome.runtime.sendMessage({ 
+      action: 'UPDATE_LOADING_MESSAGE', 
+      message: 'Scrolling to load job descriptions...'
+    });
+    
+    // Set loading state to ensure loading indicator is visible
+    chrome.runtime.sendMessage({
+      action: 'SET_LOADING_STATE',
+      isLoading: true
+    });
 
     // Find the job listings container - first try to find the UL container specifically
     const jobCardSelector = 'li.occludable-update';
@@ -835,6 +886,18 @@ function scrollJobListingsToLoadAll() {
 
     if (!jobsContainer) {
       console.log('Could not find the job listings container for scrolling');
+      // Update loading message to indicate failure
+      chrome.runtime.sendMessage({ 
+        action: 'UPDATE_LOADING_MESSAGE', 
+        message: 'Failed to find job listings container'
+      });
+      
+      // Reset loading state
+      chrome.runtime.sendMessage({
+        action: 'SET_LOADING_STATE',
+        isLoading: false
+      });
+      
       resolve(false);
       return;
     }
@@ -847,13 +910,19 @@ function scrollJobListingsToLoadAll() {
     const initialJobCount = document.querySelectorAll(jobCardSelector).length;
     console.log(`Initial job card count before scrolling: ${initialJobCount}`);
 
+    // Update loading message with initial count
+    chrome.runtime.sendMessage({ 
+      action: 'UPDATE_LOADING_MESSAGE', 
+      message: `Reading job descriptions... (0/${initialJobCount})`
+    });
+
     // Save the initial scroll position
     const initialScrollTop = jobsContainer.scrollTop;
     
     let previousJobCount = initialJobCount;
     let noChangeCounter = 0;
     let scrollAttempts = 0;
-    const maxScrollAttempts = 20; // Increased max scroll attempts to ensure better coverage
+    const maxScrollAttempts = 1; // Changed from 20 to 1 to limit scrolling to just one time
     
     // Function to perform a gradual scroll down and then quickly back up
     const scrollGradually = () => {
@@ -865,12 +934,24 @@ function scrollJobListingsToLoadAll() {
         const finalJobCount = document.querySelectorAll(jobCardSelector).length;
         console.log(`Final job card count after scrolling: ${finalJobCount} (started with ${initialJobCount})`);
         
+        // Update loading message for extraction phase
+        chrome.runtime.sendMessage({ 
+          action: 'UPDATE_LOADING_MESSAGE', 
+          message: `Extracting ${finalJobCount} job descriptions...`
+        });
+        
         resolve(true);
         return;
       }
 
       scrollAttempts++;
       console.log(`Starting scroll attempt #${scrollAttempts}`);
+      
+      // Update loading message with current attempt
+      chrome.runtime.sendMessage({ 
+        action: 'UPDATE_LOADING_MESSAGE', 
+        message: `Scrolling to load job descriptions... (single scroll)`
+      });
       
       // Instead of jumping to the bottom immediately, we'll scroll in increments
       const scrollHeight = jobsContainer.scrollHeight;
@@ -884,6 +965,13 @@ function scrollJobListingsToLoadAll() {
         if (currentStep >= incrementalSteps) {
           // We've reached the bottom, now quickly scroll back up
           console.log('Reached bottom of scroll container, scrolling back to top');
+          
+          // Update loading message for scrolling back up
+          chrome.runtime.sendMessage({ 
+            action: 'UPDATE_LOADING_MESSAGE', 
+            message: `Scrolling back to top... (attempt ${scrollAttempts}/${maxScrollAttempts})`
+          });
+          
           setTimeout(() => {
             // Fast scroll to top
             jobsContainer.scrollTop = 0;
@@ -894,24 +982,30 @@ function scrollJobListingsToLoadAll() {
               const currentJobCount = document.querySelectorAll(jobCardSelector).length;
               console.log(`Job count after scroll #${scrollAttempts}: ${currentJobCount} (previously ${previousJobCount})`);
               
+              // Update loading message with job count
+              chrome.runtime.sendMessage({ 
+                action: 'UPDATE_LOADING_MESSAGE', 
+                message: `Found ${currentJobCount} job descriptions (scroll ${scrollAttempts}/${maxScrollAttempts})`
+              });
+              
               // Check if we've reached the end (no more jobs loading)
               if (currentJobCount === previousJobCount) {
-                noChangeCounter++;
-                console.log(`No new jobs loaded, counter: ${noChangeCounter}/5`);
+                // Since we're only doing one scroll, we'll immediately finish
+                console.log('Completed single scroll through job listings');
+                // Restore the original scroll position
+                jobsContainer.scrollTop = initialScrollTop;
                 
-                // If we haven't seen new jobs for several scrolls, we're probably at the end
-                // Increased from 3 to 5 for more patience
-                if (noChangeCounter >= 5) {
-                  console.log('No new jobs loaded after 5 scroll attempts, ending scroll');
-                  // Restore the original scroll position
-                  jobsContainer.scrollTop = initialScrollTop;
-                  
-                  const finalJobCount = document.querySelectorAll(jobCardSelector).length;
-                  console.log(`Final job card count after scrolling: ${finalJobCount} (started with ${initialJobCount})`);
-                  
-                  resolve(true);
-                  return;
-                }
+                const finalJobCount = document.querySelectorAll(jobCardSelector).length;
+                console.log(`Final job card count after scrolling: ${finalJobCount} (started with ${initialJobCount})`);
+                
+                // Update loading message for extraction phase
+                chrome.runtime.sendMessage({ 
+                  action: 'UPDATE_LOADING_MESSAGE', 
+                  message: `Extracting ${finalJobCount} job descriptions...`
+                });
+                
+                resolve(true);
+                return;
               } else {
                 // Reset counter if we found new jobs
                 noChangeCounter = 0;
@@ -920,8 +1014,22 @@ function scrollJobListingsToLoadAll() {
               
               previousJobCount = currentJobCount;
               
-              // Continue scrolling with the next attempt
-              setTimeout(scrollGradually, 300);
+              // Since we're only doing one scroll, we'll resolve here instead of continuing
+              console.log('Completed single scroll through job listings');
+              // Restore the original scroll position
+              jobsContainer.scrollTop = initialScrollTop;
+              
+              const finalJobCount = document.querySelectorAll(jobCardSelector).length;
+              console.log(`Final job card count after scrolling: ${finalJobCount} (started with ${initialJobCount})`);
+              
+              // Update loading message for extraction phase
+              chrome.runtime.sendMessage({ 
+                action: 'UPDATE_LOADING_MESSAGE', 
+                message: `Extracting ${finalJobCount} job descriptions...`
+              });
+              
+              resolve(true);
+              return;
             }, 500); // Check for new jobs after scrolling to top
           }, 300); // Wait before scrolling back to top
           
@@ -938,11 +1046,17 @@ function scrollJobListingsToLoadAll() {
         jobsContainer.scrollTop = nextScrollTop;
         console.log(`Scroll step ${currentStep + 1}/${incrementalSteps}: Scrolled to position ${nextScrollTop}px`);
         
+        // Update loading message with current step
+        chrome.runtime.sendMessage({ 
+          action: 'UPDATE_LOADING_MESSAGE', 
+          message: `Scrolling down to load jobs... (step ${currentStep + 1}/${incrementalSteps})`
+        });
+        
         // Pause at each step to let content load
         currentStep++;
         
         // Longer pause time for LinkedIn to load content
-        setTimeout(scrollDownStep, 600); // Increased from typical 300ms to 600ms for slower scrolling
+        setTimeout(scrollDownStep, 1000); // Increased from 600ms to 1000ms to give more time for content to load
       };
       
       // Start the incremental scrolling process
@@ -1066,6 +1180,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         
         console.log(`Step 3: Sending ${validListings.length} formatted job listings for analysis`);
         
+        // Update loading message for the analysis phase
+        chrome.runtime.sendMessage({ 
+          action: 'UPDATE_LOADING_MESSAGE', 
+          message: `Processing ${validListings.length} jobs...`
+        });
+        
         // Explicitly send the job listings to the background script
         chrome.runtime.sendMessage({
           action: 'JOB_LISTINGS_EXTRACTED',
@@ -1092,7 +1212,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       });
       
       return true; // Keep message channel open for async response
-    } else if (message.action === 'LOAD_NEXT_PAGE_JOBS') {
+    } 
+    else if (message.action === 'LOAD_NEXT_PAGE_JOBS') {
       // This action is triggered when the user clicks to load the next page
       console.log('Received request to load next page jobs - starting the sequence');
       
@@ -1100,6 +1221,25 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       chrome.runtime.sendMessage({
         action: 'CLEAR_EXISTING_JOBS',
         message: 'Clearing existing job data before new page load'
+      });
+      
+      // Configure the loading message system
+      chrome.runtime.sendMessage({ 
+        action: 'CONFIGURE_LOADING_MESSAGE', 
+        enabled: true,
+        defaultMessage: 'Navigating to next page...'
+      });
+      
+      // Show initial loading message
+      chrome.runtime.sendMessage({ 
+        action: 'UPDATE_LOADING_MESSAGE', 
+        message: 'Navigating to next page of job listings...'
+      });
+      
+      // Set loading state to ensure loading indicator is visible
+      chrome.runtime.sendMessage({
+        action: 'SET_LOADING_STATE',
+        isLoading: true
       });
       
       // Always set suppressScrolling to false to ensure we always scroll
@@ -1118,9 +1258,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         // will now handle scrolling, extraction, and sending the NEXT_PAGE_SUCCESS message
         sendResponse({ success: true });
       } else {
+        // Update loading message to indicate failure
+        chrome.runtime.sendMessage({ 
+          action: 'UPDATE_LOADING_MESSAGE', 
+          message: 'Failed to navigate to next page'
+        });
+        
+        // Reset loading state
+        chrome.runtime.sendMessage({
+          action: 'SET_LOADING_STATE',
+          isLoading: false
+        });
+        
         sendResponse({ success: false, error: 'Could not navigate to next page' });
       }
-    } else if (message.action === 'GET_JOB_DESCRIPTION') {
+      
+      return true; // Keep message channel open for async response
+    }
+    else if (message.action === 'GET_JOB_DESCRIPTION') {
       const { jobId } = message;
       console.log(`Received request to get description for job ID: ${jobId}`);
 
@@ -1172,7 +1327,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }, 1500); // Wait for description to load
 
       return true; // Keep the message channel open for the async response
-    } else if (message.action === 'HIGHLIGHT_JOB') {
+    }
+    else if (message.action === 'HIGHLIGHT_JOB') {
       const { jobId } = message;
       console.log(`Received request to highlight job ID: ${jobId}`);
 
