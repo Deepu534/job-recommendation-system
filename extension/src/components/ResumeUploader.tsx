@@ -1,8 +1,9 @@
 import React, { useCallback, useState, useEffect } from 'react';
-import { Box, Typography, Button, Alert } from '@mui/material';
+import { Box, Typography, Button, Alert, Chip } from '@mui/material';
 import { useDropzone } from 'react-dropzone';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ClearIcon from '@mui/icons-material/Clear';
 
 interface ResumeUploaderProps {
   onUpload: (resumeData: string) => void;
@@ -14,12 +15,14 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [base64Data, setBase64Data] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isPendingConfirmation, setIsPendingConfirmation] = useState(false);
 
   useEffect(() => {
     if (!resumeUploaded) {
       setFileName(null);
       setBase64Data(null);
       setError(null);
+      setIsPendingConfirmation(false);
     }
   }, [resumeUploaded]);
 
@@ -53,7 +56,10 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
         const base64String = reader.result as string;
         setBase64Data(base64String);
         setIsProcessing(false);
+        setIsPendingConfirmation(true);
         console.log('Resume data processed successfully');
+        
+        // No longer automatically upload - wait for confirmation
       } catch (err) {
         console.error('Failed to process file:', err);
         setError(`Failed to process file: ${err instanceof Error ? err.message : 'Unknown error'}`);
@@ -65,18 +71,20 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
     reader.readAsDataURL(file);
   }, []);
 
-  const handleUploadClick = () => {
-    if (!base64Data) {
-      setError('No resume data available. Please drop a PDF file first.');
-      return;
+  const handleConfirmUpload = () => {
+    if (base64Data) {
+      onUpload(base64Data);
+      setIsPendingConfirmation(false);
     }
-    
-    if (base64Data.length === 0) {
-      setError('Resume data is empty. Please try uploading the file again.');
-      return;
-    }
-    
-    onUpload(base64Data);
+  };
+
+  const handleRemoveFile = (event?: React.MouseEvent) => {
+    if (event) event.stopPropagation();
+    setFileName(null);
+    setBase64Data(null);
+    setError(null);
+    setIsPendingConfirmation(false);
+    onUpload('');
   };
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -86,13 +94,18 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
     },
     maxFiles: 1,
     multiple: false,
-    disabled: isProcessing
+    disabled: isProcessing || isPendingConfirmation
   });
 
   return (
     <Box sx={{ 
       width: '100%',
-      padding: 1
+      padding: 1,
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      height: isPendingConfirmation ? 'calc(100vh - 200px)' : 'auto',
+      minHeight: isPendingConfirmation ? '400px' : 'auto'
     }}>
       {resumeUploaded ? (
         <Box sx={{ 
@@ -107,9 +120,24 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
             Resume uploaded successfully!
           </Typography>
           {fileName && (
-            <Typography variant="body2" color="text.secondary">
-              {fileName}
-            </Typography>
+            <Box sx={{ display: 'flex', justifyContent: 'center', mt: 1 }}>
+              <Chip
+                label={fileName}
+                color="primary"
+                variant="outlined"
+                onDelete={handleRemoveFile}
+                deleteIcon={<ClearIcon />}
+                sx={{ 
+                  maxWidth: '100%', 
+                  fontWeight: 500,
+                  '& .MuiChip-label': { 
+                    whiteSpace: 'normal',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }
+                }}
+              />
+            </Box>
           )}
           <Typography variant="body1" sx={{ mt: 2 }}>
             Go to the "Job Rankings" tab and click the "Analyze Jobs" button to see how well your resume matches with the job listings.
@@ -117,16 +145,67 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
           <Button 
             variant="outlined" 
             color="primary"
-            onClick={() => {
-              setFileName(null);
-              setBase64Data(null);
-              setError(null);
-              onUpload('');
-            }}
+            onClick={handleRemoveFile}
             sx={{ mt: 2 }}
           >
             Upload a different resume
           </Button>
+        </Box>
+      ) : isPendingConfirmation ? (
+        <Box sx={{ 
+          textAlign: 'center',
+          p: 3,
+          py: 4,
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 2,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          alignItems: 'center',
+          maxWidth: '400px',
+          width: '100%',
+          boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)'
+        }}>
+          <Typography variant="h6" sx={{ mb: 2 }}>
+            Resume ready to upload
+          </Typography>
+          {fileName && (
+            <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+              <Chip
+                label={fileName}
+                color="primary"
+                variant="outlined"
+                onDelete={() => handleRemoveFile()}
+                deleteIcon={<ClearIcon />}
+                sx={{ 
+                  maxWidth: '100%', 
+                  fontWeight: 500,
+                  '& .MuiChip-label': { 
+                    whiteSpace: 'normal',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }
+                }}
+              />
+            </Box>
+          )}
+          <Box sx={{ display: 'flex', justifyContent: 'center', gap: 2 }}>
+            <Button 
+              variant="contained" 
+              color="primary"
+              onClick={handleConfirmUpload}
+            >
+              Confirm Upload
+            </Button>
+            <Button 
+              variant="outlined" 
+              color="error"
+              onClick={() => handleRemoveFile()}
+            >
+              Cancel
+            </Button>
+          </Box>
         </Box>
       ) : (
         <Box sx={{ width: '100%' }}>
@@ -175,25 +254,28 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
             <Typography variant="body2" color="text.secondary">
               Only PDF files are accepted
             </Typography>
+            
+            {fileName && !isProcessing && !resumeUploaded && !isPendingConfirmation && (
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
+                <Chip
+                  label={fileName}
+                  color="primary"
+                  variant="outlined"
+                  onDelete={handleRemoveFile}
+                  deleteIcon={<ClearIcon />}
+                  sx={{ 
+                    maxWidth: '100%', 
+                    fontWeight: 500,
+                    '& .MuiChip-label': { 
+                      whiteSpace: 'normal',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis'
+                    }
+                  }}
+                />
+              </Box>
+            )}
           </Box>
-          
-          {fileName && base64Data && !isProcessing && (
-            <Box sx={{ mt: 2, width: '100%' }}>
-              <Typography variant="body2" sx={{ mb: 1 }}>
-                Selected file: {fileName}
-              </Typography>
-              
-              <Button 
-                variant="contained" 
-                color="primary" 
-                fullWidth
-                onClick={handleUploadClick}
-                disabled={isProcessing}
-              >
-                Upload Resume
-              </Button>
-            </Box>
-          )}
         </Box>
       )}
     </Box>

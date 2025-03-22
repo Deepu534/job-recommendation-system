@@ -55,6 +55,7 @@ export interface JobRankingsProps {
   onRefresh: () => void;
   onLoadMore?: () => void;
   onLoadNextPage?: () => void;
+  onClearResults?: () => void;
   hasMoreJobs?: boolean;
   isLoadingMore?: boolean;
   isLoadingNextPage?: boolean;
@@ -172,6 +173,7 @@ function JobRankings({
   onRefresh, 
   onLoadMore, 
   onLoadNextPage,
+  onClearResults,
   hasMoreJobs = false, 
   isLoadingMore = false,
   isLoadingNextPage = false
@@ -209,7 +211,8 @@ function JobRankings({
       <JobRankingsHeader 
         params={{
           rankingsCount: rankings.length,
-          hasMoreJobs: localHasMoreJobs
+          hasMoreJobs: localHasMoreJobs,
+          onClearResults
         }}
       />
       

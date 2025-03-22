@@ -429,6 +429,34 @@ export function useJobRankings({
     });
   };
   
+  // Handle clearing all job results
+  const handleClearResults = () => {
+    console.log('Clearing all job results');
+    
+    // Clear all job rankings from state
+    setJobRankings([]);
+    setHasMoreJobs(false);
+    setIsLoadingMore(false);
+    setIsLoadingNextPage(false);
+    setError(null);
+    
+    // Clear job rankings from storage
+    chrome.storage.local.set({ 
+      jobListings: [],
+      jobRankings: [],
+      allJobRankings: [],
+      currentDisplayIndex: 0
+    }, () => {
+      console.log('Successfully cleared all job data from storage');
+    });
+    
+    // Send message to clear any loaded jobs in background
+    chrome.runtime.sendMessage({ 
+      action: 'CLEAR_EXISTING_JOBS',
+      message: 'User manually cleared all job results'
+    });
+  };
+  
   // Clean up function to properly reset state when unmounting
   useEffect(() => {
     return () => {
@@ -448,6 +476,7 @@ export function useJobRankings({
     handleMatchJobs,
     handleLoadMore,
     handleLoadNextPage,
-    handleJobClick
+    handleJobClick,
+    handleClearResults
   };
 } 

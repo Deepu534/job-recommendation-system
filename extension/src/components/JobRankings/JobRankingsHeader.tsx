@@ -2,17 +2,20 @@ import React from 'react';
 import { 
   Box, 
   Typography, 
+  Button
 } from '@mui/material';
+import ClearIcon from '@mui/icons-material/Clear';
 
 export interface JobRankingsHeaderProps { 
   params: {
     rankingsCount: number; 
     hasMoreJobs: boolean;
+    onClearResults?: () => void;
   }
 }
 
 function JobRankingsHeader({ params }: JobRankingsHeaderProps) {
-  const { rankingsCount, hasMoreJobs } = params;
+  const { rankingsCount, hasMoreJobs, onClearResults } = params;
   
   return (
     <Box sx={{ 
@@ -29,6 +32,25 @@ function JobRankingsHeader({ params }: JobRankingsHeaderProps) {
         <Typography variant="h6">
           AI Job Rankings
         </Typography>
+        
+        {/* Clear Results Button */}
+        {rankingsCount > 0 && onClearResults && (
+          <Button
+            variant="outlined"
+            color="error"
+            size="small"
+            startIcon={<ClearIcon />}
+            onClick={onClearResults}
+            sx={{
+              fontWeight: 'bold',
+              fontSize: '0.8rem',
+              py: 0.5,
+              px: 1.5
+            }}
+          >
+            Clear Results
+          </Button>
+        )}
       </Box>
       
       {/* Job count indicator */}
