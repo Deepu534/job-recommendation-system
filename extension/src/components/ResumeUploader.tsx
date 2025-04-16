@@ -168,7 +168,7 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
           boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)'
         }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Resume ready to upload
+            Please confirm your resume before starting the job ranking analysis
           </Typography>
           {fileName && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>

@@ -38,7 +38,7 @@ function EmptyJobsMessage({ params }: EmptyJobsMessageProps) {
         onClick={onRefresh}
         sx={{ mt: 2 }}
       >
-        Analyze All Jobs
+        Scroll and Analyze Jobs
       </Button>
     </Box>
   );
