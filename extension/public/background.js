@@ -142,9 +142,7 @@ async function handleJobListingsExtracted(data, sendResponse) {
     }
     
     jobListings = validListings;
-    
     chrome.storage.local.set({ jobListings });
-
     sendResponse({ 
       success: true, 
       message: `Stored ${validListings.length} jobs successfully`,
@@ -155,7 +153,6 @@ async function handleJobListingsExtracted(data, sendResponse) {
   }
 }
 
-// Handle resume upload from the popup
 async function handleResumeUpload(data, sendResponse) {
   try {
     if (data === '') {

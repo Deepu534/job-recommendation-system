@@ -1,17 +1,10 @@
-// LinkedIn Job Analyzer Content Script
-
-// Function to extract job data from LinkedIn job listings
 function extractJobListings() {
-  console.log('Attempting to extract job listings from LinkedIn...');
-
-  // Update loading message for extraction phase
   chrome.runtime.sendMessage({ 
     action: 'UPDATE_LOADING_MESSAGE', 
     message: 'Extracting job listings...'
   });
 
   try {
-    // Try multiple selectors to find job cards
     const possibleSelectors = [
       'li.occludable-update',
       'li.jobs-search-results__list-item',
@@ -23,26 +16,19 @@ function extractJobListings() {
     
     let jobCards = [];
     let usedSelector = '';
-    
-    // Try each selector until we find job cards
+
     for (const selector of possibleSelectors) {
       const cards = document.querySelectorAll(selector);
       if (cards && cards.length > 0) {
-        console.log(`Found ${cards.length} job cards using selector: ${selector}`);
         jobCards = Array.from(cards);
         usedSelector = selector;
         break;
       }
     }
     
-    // If we still don't have job cards, try a more general approach
     if (jobCards.length === 0) {
-      console.log('No job cards found with specific selectors, trying general approach');
-      
-      // Look for elements that might be job cards based on content
       const allElements = document.querySelectorAll('li, div');
       const possibleJobCards = Array.from(allElements).filter(element => {
-        // Check if this element has job-related content
         const text = element.textContent.toLowerCase();
         return (
           (element.querySelector('a[href*="jobs/view"]') || 
@@ -52,27 +38,19 @@ function extractJobListings() {
       });
       
       if (possibleJobCards.length > 0) {
-        console.log(`Found ${possibleJobCards.length} potential job cards using content heuristics`);
         jobCards = possibleJobCards;
         usedSelector = 'content-based-detection';
       }
     }
     
     if (jobCards.length === 0) {
-      console.log('ERROR: Could not find any job cards on the page');
       return [];
     }
     
-    console.log(`Processing ${jobCards.length} job cards found with selector: ${usedSelector}`);
-    
     const jobListings = [];
 
-    // Process each job card
     jobCards.forEach((card, index) => {
       try {
-        // Try multiple selectors for each piece of information
-
-        // Extract job title
         const titleSelectors = [
           '.job-card-container__link',
           'a[data-control-name="job_card_title_click"]',
@@ -80,26 +58,22 @@ function extractJobListings() {
           'a[href*="jobs/view"]',
           'a[class*="job-title"]',
           'a[class*="title"]',
-          // Add more specific LinkedIn selectors
           '.job-card-list__title',
           '.job-card-container__link',
           '.artdeco-entity-lockup__title',
           '.jobs-unified-top-card__job-title',
-          // General fallbacks
           'h2', 'h3', 'h4',
-          'a' // Last resort - find the first link
+          'a'
         ];
         const titleElement = findElementWithSelectors(card, titleSelectors);
         const title = titleElement ? titleElement.textContent.trim() : '';
 
-        // Extract company name
         const companySelectors = [
           '.artdeco-entity-lockup__subtitle',
           '[data-control-name="job_card_company_link"]',
           'span[class*="company"]',
           'div[class*="company"]',
           'a[href*="company"]',
-          // Add more specific LinkedIn selectors
           '.job-card-container__company-name',
           '.job-card-container__primary-description',
           '.job-card-container__subtitle',
@@ -108,14 +82,12 @@ function extractJobListings() {
         const companyElement = findElementWithSelectors(card, companySelectors);
         const company = companyElement ? companyElement.textContent.trim() : '';
 
-        // Extract location
         const locationSelectors = [
           '.job-card-container__metadata-wrapper',
           '.artdeco-entity-lockup__caption',
           '.job-card-container__location',
           'span[class*="location"]',
           'div[class*="location"]',
-          // Add more specific LinkedIn selectors  
           '.job-card-container__metadata-item',
           '.artdeco-entity-lockup__caption',
           'span[class*="location"]'
@@ -123,37 +95,30 @@ function extractJobListings() {
         const locationElement = findElementWithSelectors(card, locationSelectors);
         const location = locationElement ? locationElement.textContent.trim() : '';
 
-        // Extract job URL
         const linkSelectors = [
           '.job-card-container__link',
           'a[data-control-name="job_card_title_click"]',
           'a[href*="jobs/view"]',
           'a[class*="job-title"]',
           'a[href*="linkedin.com/jobs"]',
-          'a' // Last resort - find the first link
+          'a'
         ];
         const linkElement = findElementWithSelectors(card, linkSelectors);
         const jobUrl = linkElement ? linkElement.href : '';
 
-        // Extract job ID from the URL or data attribute
         let jobId = `job-${index}`;
 
         if (jobUrl) {
-          // Try to extract from URL
           const idFromUrl = jobUrl.split('currentJobId=')[1]?.split('&')[0];
           if (idFromUrl) jobId = idFromUrl;
         }
 
-        // Try to get from data attributes
         const dataJobId = card.getAttribute('data-job-id') ||
           card.getAttribute('data-occludable-job-id') ||
           card.getAttribute('data-id') ||
           card.getAttribute('data-occludable-entity-urn');
         if (dataJobId) jobId = dataJobId;
 
-        console.log(`Extracted job: ${title} at ${company}, ID: ${jobId}`);
-
-        // Only add jobs with at least a title or company
         if ((title || company) && jobId) {
           jobListings.push({
             id: jobId,
@@ -161,59 +126,35 @@ function extractJobListings() {
             company: company || 'Unknown Company',
             location: location || '',
             url: jobUrl || '',
-            element: null // Don't store DOM references
+            element: null
           });
-        } else {
-          console.log(`Skipping job card ${index} - insufficient data extracted`);
         }
       } catch (error) {
         console.error(`Error extracting job data for card ${index}:`, error);
       }
     });
-
-    console.log(`Successfully extracted ${jobListings.length} valid job listings from ${jobCards.length} cards`);
-    
-    // Log additional debug info if we didn't extract many jobs
-    if (jobListings.length < 5 && jobCards.length > 5) {
-      console.warn('WARNING: Extracted significantly fewer jobs than cards found!');
-      console.log('This might indicate issues with the selectors used for extraction.');
-    }
-    
-    // Double-check we have at least some jobs
-    if (jobListings.length === 0) {
-      console.error('ERROR: No job listings extracted after processing all cards!');
-    }
-
     return jobListings;
   } catch (error) {
-    console.error('Error in extractJobListings:', error);
-    return []; // Return empty array in case of error
+    return [];
   }
 }
 
-// Helper function to try multiple selectors and return the first found element
 function findElementWithSelectors(parentElement, selectors) {
   try {
     for (const selector of selectors) {
       const elements = parentElement.querySelectorAll(selector);
       if (elements && elements.length > 0) {
-        // Only log when elements are found, and with less verbosity
         return elements[0];
       }
     }
     return null;
   } catch (error) {
-    console.error('Error in findElementWithSelectors:', error);
     return null;
   }
 }
 
-// Function to get the full job description when a job is selected
 function getSelectedJobDescription() {
-  console.log('Attempting to extract job description...');
-
   try {
-    // Try multiple selectors for job descriptions
     const descriptionSelectors = [
       '.jobs-description-content__text',
       '.jobs-description__content',
@@ -238,14 +179,9 @@ function getSelectedJobDescription() {
     }
 
     if (!descriptionElement) {
-      console.log('No job description element found with standard selectors, trying fallback approach');
-
-      // Try to find any large text block that might be a job description
       const possibleDescriptionElements = Array.from(document.querySelectorAll('div, p, section, article'))
         .filter(el => {
           const text = el.textContent.trim();
-          // Look for elements with substantial text that might be job descriptions
-          return text.length > 200 &&
             (text.toLowerCase().includes('responsibilities') ||
               text.toLowerCase().includes('qualifications') ||
               text.toLowerCase().includes('requirements') ||
@@ -255,148 +191,92 @@ function getSelectedJobDescription() {
 
       if (possibleDescriptionElements.length > 0) {
         descriptionElement = possibleDescriptionElements[0];
-        console.log('Found possible description element using content heuristics');
       } else {
-        console.log('No job description element found at all');
         return null;
       }
     }
 
-    // Get the text content
     const description = descriptionElement.textContent.trim();
-    console.log(`Extracted job description (${description.length} characters)`);
-
-    if (description.length < 50) {
-      console.warn('Job description is suspiciously short, might be incorrect element');
-    }
 
     return {
       description,
-      fullHtml: '' // Don't return HTML to save memory and avoid crashes
+      fullHtml: ''
     };
   } catch (error) {
-    console.error('Error in getSelectedJobDescription:', error);
     return null;
   }
 }
 
-// Send job listings to the background script
 function sendJobsToBackground(jobListings) {
   try {
-    console.log(`Sending ${jobListings.length} job listings to background script`);
     chrome.runtime.sendMessage({
       action: 'JOB_LISTINGS_EXTRACTED',
       data: jobListings
-    }, (response) => {
-      if (chrome.runtime.lastError) {
-        console.error('Error sending job listings to background:', chrome.runtime.lastError);
-      } else {
-        console.log('Successfully sent job listings to background script:', response);
-      }
     });
   } catch (error) {
     console.error('Error in sendJobsToBackground:', error);
   }
 }
 
-// Function to navigate to the next page of LinkedIn jobs
 function navigateToNextJobPage(suppressScrolling = false) {
-  console.log('Attempting to navigate to the next page of job listings...');
-  console.log(`Suppress additional scrolling parameter received: ${suppressScrolling}`);
-  // Override the suppressScrolling parameter to always ensure scrolling happens
   suppressScrolling = false;
-  console.log(`Override applied - will perform scrolling: suppressScrolling = ${suppressScrolling}`);
-
   try {
-    // Variables used by multiple approaches
     let currentPage = 1;
     let nextButton = null;
-    
-    // APPROACH 0: First, try the exact button the user identified
     nextButton = document.querySelector('button[aria-label="View next page"], button.jobs-search-pagination__button--next');
     
     if (nextButton) {
-      console.log('Found next page button using exact aria-label or class');
-      
-      // Try to extract current page from pagination if possible
       const activePaginationItem = document.querySelector('.artdeco-pagination__indicator--number.active, .artdeco-pagination__indicator.active, [aria-current="true"]');
       if (activePaginationItem) {
         const pageText = activePaginationItem.textContent.trim();
         const pageNumber = parseInt(pageText);
         if (!isNaN(pageNumber)) {
           currentPage = pageNumber;
-          console.log(`Current page from pagination: ${currentPage}`);
         }
       }
       
-      // Proceed to clicking this exact button
-      console.log('Clicking specific next page button...');
       try {
         nextButton.click();
-        console.log('Successfully clicked Next button');
-        
-        // Process after successful navigation
         handleAfterClick(currentPage, suppressScrolling);
         return true;
       } catch (clickError) {
-        console.error('Error clicking specific Next button:', clickError);
-        // Fall through to other approaches
-        nextButton = null; // Reset for other approaches
+        nextButton = null;
       }
     }
     
-    // APPROACH 0.5: Try finding the button with SVG icon
     if (!nextButton) {
-      console.log('Trying to find Next button with SVG chevron-right icon...');
-      // Look for buttons with the chevron-right-small SVG icon
       const buttonsWithSVG = Array.from(document.querySelectorAll('button'));
       
       const nextButtons = buttonsWithSVG.filter(btn => {
-        // Check for SVG with data-test-icon="chevron-right-small"
         const svgIcon = btn.querySelector('svg[data-test-icon="chevron-right-small"]');
-        // Check if button text contains "Next"
         const hasNextText = btn.textContent.trim().toLowerCase().includes('next');
         return svgIcon || hasNextText;
       });
       
       if (nextButtons.length > 0) {
-        nextButton = nextButtons[0];
-        console.log('Found Next button with SVG icon');
-        
+        nextButton = nextButtons[0];    
         try {
           nextButton.click();
-          console.log('Successfully clicked Next button with SVG');
           handleAfterClick(currentPage, suppressScrolling);
           return true;
         } catch (clickError) {
-          console.error('Error clicking Next button with SVG:', clickError);
-          nextButton = null; // Reset for other approaches
+          nextButton = null;
         }
       }
     }
-    
-    // If the specific button approach fails, continue with remaining approaches
-    // APPROACH 1: Try the standard pagination selectors
+
     let activePageElement = document.querySelector('.artdeco-pagination__indicator--number.active.selected');
     
     if (activePageElement) {
-      console.log('Found active page element with standard selector');
       const currentPageBtn = activePageElement.querySelector('button');
       currentPage = currentPageBtn ? parseInt(currentPageBtn.querySelector('span').textContent) : 1;
-      console.log(`Current page: ${currentPage}`);
-      
-      // Try to find the next page button with the standard selector
       const nextPageElement = document.querySelector(`[data-test-pagination-page-btn="${currentPage + 1}"]`);
       if (nextPageElement) {
         nextButton = nextPageElement.querySelector('button');
       }
     }
-    
-    // APPROACH 2: If standard approach failed, try alternative selectors for pagination
+
     if (!nextButton) {
-      console.log('Standard selector failed, trying alternative pagination selectors');
-      
-      // Try to find any active page indicator with various selectors
       const possibleActiveSelectors = [
         '.artdeco-pagination__indicator.active',
         '.artdeco-pagination__indicator.selected',
@@ -416,21 +296,15 @@ function navigateToNextJobPage(suppressScrolling = false) {
         const element = document.querySelector(selector);
         if (element) {
           activePageElement = element;
-          console.log(`Found active page element with alternative selector: ${selector}`);
-          
-          // Try to extract the current page number
           const pageText = element.textContent.trim();
           const pageNumber = parseInt(pageText);
           if (!isNaN(pageNumber)) {
             currentPage = pageNumber;
-            console.log(`Current page from alternative selector: ${currentPage}`);
           }
           break;
         }
       }
       
-      // APPROACH 3: Look for "Next" button directly
-      console.log('Looking for Next button directly...');
       const nextButtonSelectors = [
         '.artdeco-pagination__button--next',
         'button[aria-label="Next"]',
@@ -439,11 +313,8 @@ function navigateToNextJobPage(suppressScrolling = false) {
         'button[data-control-name="pagination_right"]',
         'button.artdeco-pagination__button--next',
         'button.artdeco-pagination__button[data-direction="next"]',
-        // Try to find the button by its text content
         'button:not([disabled]):-webkit-any(:has(span:contains("Next")), :contains("Next"))',
-        // General next arrows
         'button.artdeco-pagination__button:not([disabled])[aria-label*="Next"]',
-        // Look for any right arrow icon
         'button:not([disabled]) svg[data-test-icon="arrow-right-small"]',
         'button:not([disabled]) .artdeco-icon[type="arrow-right-small"]',
         'button:not([disabled]) i[aria-label*="next"]'
@@ -454,24 +325,17 @@ function navigateToNextJobPage(suppressScrolling = false) {
           const elements = document.querySelectorAll(selector);
           if (elements && elements.length > 0) {
             nextButton = elements[0];
-            console.log(`Found Next button with selector: ${selector}`);
             break;
           }
         } catch (error) {
           // Some complex selectors might not be supported, continue to the next
-          console.log(`Selector error: ${error.message}, trying next selector`);
         }
       }
       
-      // APPROACH 4: Find any button after the active page
       if (!nextButton && activePageElement) {
-        console.log('Looking for any button after the active page...');
-        
-        // Find the pagination container
         let paginationContainer = null;
         let current = activePageElement;
         
-        // Walk up to find the pagination container
         while (current && current.parentElement) {
           current = current.parentElement;
           if (current.classList.contains('artdeco-pagination') || 
@@ -481,17 +345,11 @@ function navigateToNextJobPage(suppressScrolling = false) {
             break;
           }
           
-          // Prevent infinite loop
           if (current === document.body) break;
         }
         
         if (paginationContainer) {
-          console.log('Found pagination container, looking for next button');
-          
-          // Find all buttons in the pagination
           const allButtons = Array.from(paginationContainer.querySelectorAll('button:not([disabled])'));
-          
-          // Find the index of the active button
           const activeButtonIndex = allButtons.findIndex(btn => {
             return btn.closest('li')?.classList.contains('active') || 
                    btn.closest('li')?.classList.contains('selected') ||
@@ -504,20 +362,13 @@ function navigateToNextJobPage(suppressScrolling = false) {
           
           if (activeButtonIndex !== -1 && activeButtonIndex < allButtons.length - 1) {
             nextButton = allButtons[activeButtonIndex + 1];
-            console.log('Found next button by position in pagination');
           }
         }
       }
     }
     
-    // APPROACH 5: Last resort - find ANY button that looks like a "Next" button
     if (!nextButton) {
-      console.log('Last resort: scanning all buttons for Next indicators...');
-      
-      // Get all buttons on the page
       const allButtons = Array.from(document.querySelectorAll('button:not([disabled])'));
-      
-      // Filter to those that look like "Next" buttons
       const possibleNextButtons = allButtons.filter(btn => {
         const text = btn.textContent.toLowerCase();
         const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
@@ -528,38 +379,22 @@ function navigateToNextJobPage(suppressScrolling = false) {
       });
       
       if (possibleNextButtons.length > 0) {
-        console.log(`Found ${possibleNextButtons.length} possible Next buttons`);
-        // Use the first one that looks like a "Next" button
         nextButton = possibleNextButtons[0];
       }
     }
-    
-    // Check if we found a next button with any of our approaches
     if (!nextButton) {
-      console.log('Could not find next page button with any approach');
       return false;
     }
-    
-    // Validate that the button is actually clickable
-    console.log('Found next page button, validating clickability...');
+
     if (!nextButton || typeof nextButton.click !== 'function') {
-      console.log('Found element is not clickable or does not have a click method');
-      console.log('Element type:', nextButton ? nextButton.tagName : 'null');
-      console.log('Element properties:', nextButton ? Object.keys(nextButton).join(', ') : 'none');
-      
-      // Try to find the closest clickable parent
       if (nextButton) {
-        console.log('Attempting to find a clickable parent element...');
         let current = nextButton;
         let found = false;
-        
-        // Try up to 3 parent levels to find a clickable element
         for (let i = 0; i < 3; i++) {
           if (!current || current === document.body) break;
           
           current = current.parentElement;
           if (current && typeof current.click === 'function') {
-            console.log('Found clickable parent element at level', i+1);
             nextButton = current;
             found = true;
             break;
@@ -567,11 +402,7 @@ function navigateToNextJobPage(suppressScrolling = false) {
         }
         
         if (!found) {
-          // If we can't find a clickable parent, try alternate methods
-          console.log('No clickable parent found, attempting to create and dispatch a click event');
-          
           try {
-            // Try to dispatch a click event
             const clickEvent = new MouseEvent('click', {
               view: window,
               bubbles: true,
@@ -579,11 +410,7 @@ function navigateToNextJobPage(suppressScrolling = false) {
             });
             
             const clickResult = nextButton.dispatchEvent(clickEvent);
-            console.log('Dispatched click event, result:', clickResult);
-            
-            // If event dispatching worked, treat this as success
             if (clickResult) {
-              // Continue with the process as if the click worked
               handleAfterClick(currentPage, suppressScrolling);
               return true;
             }
@@ -591,43 +418,27 @@ function navigateToNextJobPage(suppressScrolling = false) {
             console.error('Error dispatching click event:', eventError);
           }
           
-          // Last resort: try to follow the href if it's an anchor
           if (nextButton.tagName === 'A' && nextButton.href) {
-            console.log('Element is an anchor, navigating to href:', nextButton.href);
             window.location.href = nextButton.href;
-            
-            // Wait before proceeding
             setTimeout(() => {
               handleAfterClick(currentPage, suppressScrolling);
             }, 2000);
             
             return true;
           }
-          
-          console.error('All navigation attempts failed');
           return false;
         }
       } else {
-        console.error('No valid button element found to click');
         return false;
       }
     }
-    
-    // Proceed with clicking if we have a valid button
-    console.log('Clicking next page button...');
+ 
     try {
       nextButton.click();
-      console.log('Successfully clicked next page button');
-      
-      // Process after successful navigation
       handleAfterClick(currentPage, suppressScrolling);
       return true;
     } catch (clickError) {
-      console.error('Error clicking next button:', clickError);
-      
-      // Try one more fallback approach with event dispatching
       try {
-        console.log('Attempting fallback with event dispatching...');
         const clickEvent = new MouseEvent('click', {
           view: window,
           bubbles: true,
@@ -635,18 +446,13 @@ function navigateToNextJobPage(suppressScrolling = false) {
         });
         
         nextButton.dispatchEvent(clickEvent);
-        console.log('Dispatched click event as fallback');
-        
-        // Process after click event
         handleAfterClick(currentPage, suppressScrolling);
         return true;
       } catch (eventError) {
-        console.error('Failed to dispatch click event:', eventError);
         return false;
       }
     }
   } catch (error) {
-    console.error('Error navigating to next page:', error);
     chrome.runtime.sendMessage({
       action: 'NEXT_PAGE_ERROR',
       error: 'Failed to navigate to next page: ' + error.message
@@ -654,27 +460,16 @@ function navigateToNextJobPage(suppressScrolling = false) {
     return false;
   }
 
-  // Function to handle what happens after navigating to a new page
   function handleAfterClick(currentPage, suppressScrolling) {
-    // Always override suppressScrolling to ensure scrolling happens
     suppressScrolling = false;
-    
-    // Make sure we're on the right page - Add a longer delay to ensure the page has time to load
     setTimeout(() => {
-      console.log('Starting automatic job analysis after page navigation');
-      
-      // Update loading message for page load
       chrome.runtime.sendMessage({ 
         action: 'UPDATE_LOADING_MESSAGE', 
         message: 'New page loaded, preparing to analyze jobs...'
       });
-      
-      // First scroll to load all jobs
+
       scrollJobListingsToLoadAll().then(scrollSuccess => {
         if (scrollSuccess) {
-          console.log('Successfully loaded all jobs, extracting listings...');
-          
-          // Update loading message for extraction
           chrome.runtime.sendMessage({ 
             action: 'UPDATE_LOADING_MESSAGE', 
             message: 'Extracting job listings...'
@@ -683,48 +478,35 @@ function navigateToNextJobPage(suppressScrolling = false) {
           const jobListings = extractJobListings();
           
           if (jobListings && jobListings.length > 0) {
-            console.log(`Extracted ${jobListings.length} jobs, sending to background...`);
-            
-            // Update loading message for sending to backend
             chrome.runtime.sendMessage({ 
               action: 'UPDATE_LOADING_MESSAGE', 
               message: `Sending ${jobListings.length} jobs for analysis...`
             });
-            
-            // Send the extracted jobs to the background script
+
             chrome.runtime.sendMessage({
               action: 'JOB_LISTINGS_EXTRACTED',
               data: jobListings
             }, response => {
-              // Update loading message to show we're now processing job matches
-              // This is the key fix - add a message showing we're processing jobs
               chrome.runtime.sendMessage({ 
                 action: 'UPDATE_LOADING_MESSAGE', 
                 message: `Processing ${jobListings.length} job matches...`
               });
               
               if (chrome.runtime.lastError) {
-                console.error('Error sending job listings to background:', chrome.runtime.lastError);
-                // Notify of error
                 chrome.runtime.sendMessage({
                   action: 'NEXT_PAGE_ERROR',
                   error: 'Failed to analyze jobs on the next page.'
                 });
-                
-                // Update loading message with error
                 chrome.runtime.sendMessage({ 
                   action: 'UPDATE_LOADING_MESSAGE', 
                   message: 'Error sending jobs for analysis'
                 });
-                
-                // Reset loading state
+
                 chrome.runtime.sendMessage({
                   action: 'SET_LOADING_STATE',
                   isLoading: false
                 });
               } else {
-                console.log('Successfully analyzed jobs from next page');
-                // Notify of success
                 chrome.runtime.sendMessage({
                   action: 'NEXT_PAGE_SUCCESS',
                   data: {
@@ -732,8 +514,6 @@ function navigateToNextJobPage(suppressScrolling = false) {
                     currentPage: currentPage + 1
                   }
                 });
-                
-                // Update loading message with success
                 chrome.runtime.sendMessage({ 
                   action: 'UPDATE_LOADING_MESSAGE', 
                   message: `Successfully analyzed ${jobListings.length} jobs from page ${currentPage + 1}`
@@ -741,83 +521,58 @@ function navigateToNextJobPage(suppressScrolling = false) {
               }
             });
           } else {
-            console.error('No jobs found on next page');
-            
-            // Update loading message with error
             chrome.runtime.sendMessage({ 
               action: 'UPDATE_LOADING_MESSAGE', 
               message: 'No jobs found on this page'
             });
-            
-            // Reset loading state
             chrome.runtime.sendMessage({
               action: 'SET_LOADING_STATE',
               isLoading: false
             });
-            
             chrome.runtime.sendMessage({
               action: 'NEXT_PAGE_ERROR',
               error: 'No jobs found on the next page.'
             });
           }
         } else {
-          console.error('Failed to load all jobs on next page');
-          
-          // Update loading message with error
           chrome.runtime.sendMessage({ 
             action: 'UPDATE_LOADING_MESSAGE', 
             message: 'Failed to load jobs on this page'
           });
-          
-          // Reset loading state
           chrome.runtime.sendMessage({
             action: 'SET_LOADING_STATE',
             isLoading: false
           });
-          
           chrome.runtime.sendMessage({
             action: 'NEXT_PAGE_ERROR',
             error: 'Failed to load jobs on the next page.'
           });
         }
       });
-    }, 2000); // Wait for page load
+    }, 2000);
   }
 }
 
-// Function to scroll through job listings to trigger LinkedIn's lazy loading
 function scrollJobListingsToLoadAll() {
   return new Promise((resolve) => {
-    console.log('Starting to scroll job listings to load all lazy-loaded content');
-
-    // Send a loading message update to show the loading indicator
     chrome.runtime.sendMessage({ 
       action: 'CONFIGURE_LOADING_MESSAGE', 
       enabled: true,
       defaultMessage: 'Reading job descriptions...'
     });
-    
-    // Show initial message immediately
     chrome.runtime.sendMessage({ 
       action: 'UPDATE_LOADING_MESSAGE', 
       message: 'Scrolling to load job descriptions...'
     });
-    
-    // Set loading state to ensure loading indicator is visible
     chrome.runtime.sendMessage({
       action: 'SET_LOADING_STATE',
       isLoading: true
     });
-
-    // Find the job listings container - first try to find the UL container specifically
     const jobCardSelector = 'li.occludable-update';
     const jobCards = document.querySelectorAll(jobCardSelector);
-    
-    // If we have job cards, find their parent UL container
     let ulContainer = null;
     if (jobCards.length > 0) {
       let currentElement = jobCards[0];
-      // Walk up the DOM tree to find the UL parent
       while (currentElement && currentElement.tagName !== 'UL' && currentElement.parentElement) {
         currentElement = currentElement.parentElement;
       }
@@ -827,18 +582,10 @@ function scrollJobListingsToLoadAll() {
         console.log('Found UL container for job listings');
       }
     }
-    
-    // Find the actual scrollable parent container
     let scrollableParent = null;
-    
-    // If we found the UL container, let's find its scrollable parent
     if (ulContainer) {
-      console.log('Looking for scrollable parent of UL container');
       let parent = ulContainer.parentElement;
-      
-      // Walk up the DOM tree to find a scrollable parent
       while (parent) {
-        // Check if this element is scrollable
         const overflowY = window.getComputedStyle(parent).overflowY;
         const hasScroll = overflowY === 'auto' || overflowY === 'scroll' || 
                          (parent.scrollHeight > parent.clientHeight && overflowY !== 'hidden');
@@ -849,17 +596,14 @@ function scrollJobListingsToLoadAll() {
           break;
         }
         
-        // Move up to the next parent
         parent = parent.parentElement;
         
-        // Stop if we reach the body/html elements
         if (!parent || parent === document.body || parent === document.documentElement) {
           break;
         }
       }
     }
     
-    // If we didn't find a scrollable parent, try the traditional container selectors
     let jobsContainer = scrollableParent || ulContainer;
     if (!jobsContainer) {
       const possibleContainers = [
@@ -869,7 +613,6 @@ function scrollJobListingsToLoadAll() {
         'div.jobs-search-two-pane__wrapper',
         '.scaffold-layout__list',
         '#main',
-        // Add more potential LinkedIn selectors
         '.jobs-search__results-list',
         '.jobs-search__job-feed-container',
         '.jobs-search-results-page__wrapper'
@@ -878,21 +621,17 @@ function scrollJobListingsToLoadAll() {
       for (const selector of possibleContainers) {
         jobsContainer = document.querySelector(selector);
         if (jobsContainer) {
-          console.log(`Found job listings container with selector: ${selector}`);
           break;
         }
       }
     }
 
     if (!jobsContainer) {
-      console.log('Could not find the job listings container for scrolling');
-      // Update loading message to indicate failure
       chrome.runtime.sendMessage({ 
         action: 'UPDATE_LOADING_MESSAGE', 
         message: 'Failed to find job listings container'
       });
       
-      // Reset loading state
       chrome.runtime.sendMessage({
         action: 'SET_LOADING_STATE',
         isLoading: false
@@ -902,39 +641,24 @@ function scrollJobListingsToLoadAll() {
       return;
     }
 
-    // Log information about the container we found
-    console.log(`Using container: ${jobsContainer.tagName}, class: ${jobsContainer.className}`);
-    console.log(`Container dimensions: ${jobsContainer.clientWidth}x${jobsContainer.clientHeight}, scrollHeight: ${jobsContainer.scrollHeight}`);
-
-    // Get initial job card count
     const initialJobCount = document.querySelectorAll(jobCardSelector).length;
-    console.log(`Initial job card count before scrolling: ${initialJobCount}`);
-
-    // Update loading message with initial count
     chrome.runtime.sendMessage({ 
       action: 'UPDATE_LOADING_MESSAGE', 
       message: `Reading job descriptions... (0/${initialJobCount})`
     });
 
-    // Save the initial scroll position
     const initialScrollTop = jobsContainer.scrollTop;
     
     let previousJobCount = initialJobCount;
     let noChangeCounter = 0;
     let scrollAttempts = 0;
-    const maxScrollAttempts = 1; // Changed from 20 to 1 to limit scrolling to just one time
-    
-    // Function to perform a gradual scroll down and then quickly back up
+    const maxScrollAttempts = 1;
+
     const scrollGradually = () => {
       if (scrollAttempts >= maxScrollAttempts) {
-        console.log(`Reached maximum scroll attempts (${maxScrollAttempts}), stopping`);
-        // Restore the original scroll position
         jobsContainer.scrollTop = initialScrollTop;
         
         const finalJobCount = document.querySelectorAll(jobCardSelector).length;
-        console.log(`Final job card count after scrolling: ${finalJobCount} (started with ${initialJobCount})`);
-        
-        // Update loading message for extraction phase
         chrome.runtime.sendMessage({ 
           action: 'UPDATE_LOADING_MESSAGE', 
           message: `Extracting ${finalJobCount} job descriptions...`
@@ -945,44 +669,29 @@ function scrollJobListingsToLoadAll() {
       }
 
       scrollAttempts++;
-      console.log(`Starting scroll attempt #${scrollAttempts}`);
       
-      // Update loading message with current attempt
       chrome.runtime.sendMessage({ 
         action: 'UPDATE_LOADING_MESSAGE', 
         message: `Scrolling to load job descriptions... (single scroll)`
       });
       
-      // Instead of jumping to the bottom immediately, we'll scroll in increments
       const scrollHeight = jobsContainer.scrollHeight;
       const containerHeight = jobsContainer.clientHeight;
-      const incrementalSteps = 5; // Number of steps to take when scrolling down
+      const incrementalSteps = 5;
       const stepSize = scrollHeight / incrementalSteps;
       let currentStep = 0;
-      
-      // Function to incrementally scroll down
+
       const scrollDownStep = () => {
         if (currentStep >= incrementalSteps) {
-          // We've reached the bottom, now quickly scroll back up
-          console.log('Reached bottom of scroll container, scrolling back to top');
-          
-          // Update loading message for scrolling back up
           chrome.runtime.sendMessage({ 
             action: 'UPDATE_LOADING_MESSAGE', 
             message: `Scrolling back to top... (attempt ${scrollAttempts}/${maxScrollAttempts})`
           });
           
           setTimeout(() => {
-            // Fast scroll to top
             jobsContainer.scrollTop = 0;
-            console.log('Scrolled back to top');
-            
-            // Check for new job cards after full scroll cycle
             setTimeout(() => {
               const currentJobCount = document.querySelectorAll(jobCardSelector).length;
-              console.log(`Job count after scroll #${scrollAttempts}: ${currentJobCount} (previously ${previousJobCount})`);
-              
-              // Update loading message with job count
               chrome.runtime.sendMessage({ 
                 action: 'UPDATE_LOADING_MESSAGE', 
                 message: `Found ${currentJobCount} job descriptions (scroll ${scrollAttempts}/${maxScrollAttempts})`
@@ -1411,42 +1120,27 @@ function findAndClickJobCard(jobId) {
           card.getAttribute('data-id') ||
           card.getAttribute('data-entity-urn') ||
           card.id;
-
-        // Also check if the URL contains the job ID
         const cardHref = card.href || '';
         const hasIdInUrl = cardHref.includes(jobId);
 
         if (cardId === jobId || card.id === jobId || hasIdInUrl) {
-          console.log(`Found job card for ID: ${jobId}`);
           jobCardFound = true;
-
-          // Try to click on the card
           card.click();
-          console.log('Clicked on job card, waiting for description to load...');
-
-          // If we've found and clicked the card, we can stop searching
           return { success: true, card };
         }
       } catch (cardError) {
         console.error(`Error processing job card at index ${i}:`, cardError);
-        // Continue with the next card
       }
     }
 
     if (!jobCardFound) {
-      // If not found by ID directly, try to find a card with matching URL or title
-      console.log('Job card not found by ID, trying alternative methods...');
-
-      // Look for any links or cards that might match
       const allLinks = document.querySelectorAll('a[href*="jobs/view"], .job-card-list__title');
-
       for (let i = 0; i < allLinks.length; i++) {
         try {
           const link = allLinks[i];
           const href = link.href || '';
 
           if (href.includes(jobId) || href.includes('jobs/view')) {
-            console.log('Found a link that might match the job, clicking it...');
             link.click();
             return { success: true, card: link };
           }
@@ -1458,16 +1152,11 @@ function findAndClickJobCard(jobId) {
 
     return { success: false };
   } catch (error) {
-    console.error('Error in findAndClickJobCard:', error);
     return { success: false, error };
   }
 }
 
-// Run once when the content script is loaded
 function initialize() {
-  console.log('LinkedIn Job Analyzer content script initialized');
-  console.log('NOTE: Job analysis will ONLY start when the user clicks the "Analyze" button in the extension popup');
-
   try {
     // Add CSS for highlighting
     const style = document.createElement('style');
@@ -1482,18 +1171,9 @@ function initialize() {
       }
     `;
     document.head.appendChild(style);
-
-    // Wait for the page to fully load
     setTimeout(() => {
       try {
-        console.log('Page loaded - setting up job listings observer only');
-        console.log('No automatic job extraction will occur until user explicitly clicks "Analyze"');
-        
-        // NO extraction of job listings at initialization
-        // Only set up the observer to watch for changes in LinkedIn's DOM
         setupJobListingsObserver();
-        
-        // Let the background script know we're ready
         chrome.runtime.sendMessage({
           action: 'CONTENT_SCRIPT_READY',
           message: 'LinkedIn Job Analyzer content script is ready - waiting for user to click Analyze'
@@ -1501,11 +1181,10 @@ function initialize() {
       } catch (initError) {
         console.error('Error during initialization:', initError);
       }
-    }, 3000); // Wait 3 seconds for the page to load
+    }, 3000);
   } catch (error) {
     console.error('Error initializing content script:', error);
   }
 }
 
-// Initialize the content script
 initialize(); 
