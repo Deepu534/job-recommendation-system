@@ -1,0 +1,38 @@
+service: linkedin-job-analyzer-backend
+
+frameworkVersion: '3'
+
+provider:
+  name: aws
+  runtime: nodejs18.x
+  stage: dev
+  region: eu-central-1
+  timeout: 30 # 30 seconds
+  memorySize: 1024 # 1GB
+  environment:
+    PORT: 3000
+    NODE_ENV: development
+    GEMINI_API_KEY: AIzaSyBEFoSfh-MbEAl1nGcONKOcn84HjUo3lBU
+    HUGGINGFACE_API_KEY: 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
+
+functions:
+  api:
+    handler: src/lambda.handler
+    events:
+      - httpApi:
+          path: '*'
+          method: '*'
+
+plugins:
+  - serverless-offline
+  - serverless-dotenv-plugin
+
+custom:
+  serverless-offline:
+    httpPort: 3000
+  dotenv:
+    include:
+      - PORT
+      - NODE_ENV
+      - GEMINI_API_KEY
+      - HUGGINGFACE_API_KEY 
