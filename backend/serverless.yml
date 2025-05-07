@@ -12,8 +12,8 @@ provider:
   environment:
     PORT: 3000
     NODE_ENV: development
-    GEMINI_API_KEY: AIzaSyBEFoSfh-MbEAl1nGcONKOcn84HjUo3lBU
-    HUGGINGFACE_API_KEY: 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
+    GEMINI_API_KEY: ${env:GEMINI_API_KEY}
+    HUGGINGFACE_API_KEY: ${env:HUGGINGFACE_API_KEY}
 
 functions:
   api:
