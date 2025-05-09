@@ -13,7 +13,11 @@
   ],
   "action": {
     "default_popup": "index.html",
-    "default_icon": "icon.png"
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
   },
   "content_scripts": [
     {
@@ -25,8 +29,8 @@
     "service_worker": "background.js"
   },
   "icons": {
-    "16": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
   }
 } 
