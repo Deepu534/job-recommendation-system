@@ -187,7 +187,6 @@ function sendJobsToBackground(jobListings) {
 }
 
 function navigateToNextJobPage(suppressScrolling = false) {
-  suppressScrolling = false;
   try {
     let currentPage = 1;
     let nextButton = null;
@@ -208,6 +207,7 @@ function navigateToNextJobPage(suppressScrolling = false) {
         handleAfterClick(currentPage, suppressScrolling);
         return true;
       } catch (clickError) {
+        console.error('Error clicking next button:', clickError);
         nextButton = null;
       }
     }
@@ -228,184 +228,194 @@ function navigateToNextJobPage(suppressScrolling = false) {
           handleAfterClick(currentPage, suppressScrolling);
           return true;
         } catch (clickError) {
+          console.error('Error clicking next button (SVG):', clickError);
           nextButton = null;
         }
       }
     }
 
-    let activePageElement = document.querySelector('.artdeco-pagination__indicator--number.active.selected');
-    
-    if (activePageElement) {
-      const currentPageBtn = activePageElement.querySelector('button');
-      currentPage = currentPageBtn ? parseInt(currentPageBtn.querySelector('span').textContent) : 1;
-      const nextPageElement = document.querySelector(`[data-test-pagination-page-btn="${currentPage + 1}"]`);
-      if (nextPageElement) {
-        nextButton = nextPageElement.querySelector('button');
+    // If we still don't have a nextButton, try other means to find it
+    if (!nextButton) {
+      let activePageElement = document.querySelector('.artdeco-pagination__indicator--number.active.selected');
+     
+      if (activePageElement) {
+        const currentPageBtn = activePageElement.querySelector('button');
+        currentPage = currentPageBtn ? parseInt(currentPageBtn.querySelector('span').textContent) : 1;
+        const nextPageElement = document.querySelector(`[data-test-pagination-page-btn="${currentPage + 1}"]`);
+        if (nextPageElement) {
+          nextButton = nextPageElement.querySelector('button');
+        }
+      }
+      
+      if (!nextButton) {
+        const possibleActiveSelectors = [
+          '.artdeco-pagination__indicator.active',
+          '.artdeco-pagination__indicator.selected',
+          '.artdeco-pagination__indicator--number.active',
+          '.active[role="button"]',
+          '[aria-current="true"]',
+          '.selected[role="button"]',
+          '.artdeco-pagination li.active',
+          '.artdeco-pagination li.selected',
+          '.pagination li.active',
+          '.pagination li.selected',
+          '.jobs-search-results-list__pagination li.active',
+          '.jobs-search-results-list__pagination li.selected'
+        ];
+        
+        for (const selector of possibleActiveSelectors) {
+          const element = document.querySelector(selector);
+          if (element) {
+            activePageElement = element;
+            const pageText = element.textContent.trim();
+            const pageNumber = parseInt(pageText);
+            if (!isNaN(pageNumber)) {
+              currentPage = pageNumber;
+            }
+            break;
+          }
+        }
+        
+        const nextButtonSelectors = [
+          '.artdeco-pagination__button--next',
+          'button[aria-label="Next"]',
+          'button.next',
+          'li.next button',
+          'button[data-control-name="pagination_right"]',
+          'button.artdeco-pagination__button--next',
+          'button.artdeco-pagination__button[data-direction="next"]',
+          'button:not([disabled]) svg[data-test-icon="arrow-right-small"]',
+          'button:not([disabled]) .artdeco-icon[type="arrow-right-small"]',
+          'button:not([disabled]) i[aria-label*="next"]'
+        ];
+        
+        for (const selector of nextButtonSelectors) {
+          try {
+            const elements = document.querySelectorAll(selector);
+            if (elements && elements.length > 0) {
+              nextButton = elements[0];
+              break;
+            }
+          } catch (error) {
+            // Some complex selectors might not be supported, continue to the next
+          }
+        }
+        
+        if (!nextButton && activePageElement) {
+          let paginationContainer = null;
+          let current = activePageElement;
+          
+          while (current && current.parentElement) {
+            current = current.parentElement;
+            if (current.classList.contains('artdeco-pagination') || 
+                current.querySelector('li.active') || 
+                current.querySelector('li.selected')) {
+              paginationContainer = current;
+              break;
+            }
+            
+            if (current === document.body) break;
+          }
+          
+          if (paginationContainer) {
+            const allButtons = Array.from(paginationContainer.querySelectorAll('button:not([disabled])'));
+            const activeButtonIndex = allButtons.findIndex(btn => {
+              return btn.closest('li')?.classList.contains('active') || 
+                     btn.closest('li')?.classList.contains('selected') ||
+                     btn.classList.contains('active') ||
+                     btn.classList.contains('selected') ||
+                     btn.parentElement?.classList.contains('active') ||
+                     btn.parentElement?.classList.contains('selected') ||
+                     btn.getAttribute('aria-current') === 'true';
+            });
+            
+            if (activeButtonIndex !== -1 && activeButtonIndex < allButtons.length - 1) {
+              nextButton = allButtons[activeButtonIndex + 1];
+            }
+          }
+        }
+      }
+      
+      if (!nextButton) {
+        const allButtons = Array.from(document.querySelectorAll('button:not([disabled])'));
+        const possibleNextButtons = allButtons.filter(btn => {
+          const text = btn.textContent.toLowerCase();
+          const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
+          
+          return (text.includes('next') || ariaLabel.includes('next')) ||
+                 btn.querySelector('svg[data-test-icon="arrow-right-small"]') ||
+                 btn.querySelector('.artdeco-icon[type="arrow-right-small"]');
+        });
+        
+        if (possibleNextButtons.length > 0) {
+          nextButton = possibleNextButtons[0];
+        }
+      }
+
+      // If after all that we still don't have a nextButton, report failure
+      if (!nextButton) {
+        console.error('No next button found on page');
+        return false;
       }
     }
 
-    if (!nextButton) {
-      const possibleActiveSelectors = [
-        '.artdeco-pagination__indicator.active',
-        '.artdeco-pagination__indicator.selected',
-        '.artdeco-pagination__indicator--number.active',
-        '.active[role="button"]',
-        '[aria-current="true"]',
-        '.selected[role="button"]',
-        '.artdeco-pagination li.active',
-        '.artdeco-pagination li.selected',
-        '.pagination li.active',
-        '.pagination li.selected',
-        '.jobs-search-results-list__pagination li.active',
-        '.jobs-search-results-list__pagination li.selected'
-      ];
-      
-      for (const selector of possibleActiveSelectors) {
-        const element = document.querySelector(selector);
-        if (element) {
-          activePageElement = element;
-          const pageText = element.textContent.trim();
-          const pageNumber = parseInt(pageText);
-          if (!isNaN(pageNumber)) {
-            currentPage = pageNumber;
-          }
+    // If we found a nextButton but it's not directly clickable
+    if (typeof nextButton.click !== 'function') {
+      // Try to find a clickable parent
+      let current = nextButton;
+      let found = false;
+      for (let i = 0; i < 3; i++) {
+        if (!current || current === document.body) break;
+        
+        current = current.parentElement;
+        if (current && typeof current.click === 'function') {
+          nextButton = current;
+          found = true;
           break;
         }
       }
       
-      const nextButtonSelectors = [
-        '.artdeco-pagination__button--next',
-        'button[aria-label="Next"]',
-        'button.next',
-        'li.next button',
-        'button[data-control-name="pagination_right"]',
-        'button.artdeco-pagination__button--next',
-        'button.artdeco-pagination__button[data-direction="next"]',
-        'button:not([disabled]):-webkit-any(:has(span:contains("Next")), :contains("Next"))',
-        'button.artdeco-pagination__button:not([disabled])[aria-label*="Next"]',
-        'button:not([disabled]) svg[data-test-icon="arrow-right-small"]',
-        'button:not([disabled]) .artdeco-icon[type="arrow-right-small"]',
-        'button:not([disabled]) i[aria-label*="next"]'
-      ];
-      
-      for (const selector of nextButtonSelectors) {
+      // If we didn't find a clickable parent, try dispatching a click event or using href
+      if (!found) {
         try {
-          const elements = document.querySelectorAll(selector);
-          if (elements && elements.length > 0) {
-            nextButton = elements[0];
-            break;
-          }
-        } catch (error) {
-          // Some complex selectors might not be supported, continue to the next
-        }
-      }
-      
-      if (!nextButton && activePageElement) {
-        let paginationContainer = null;
-        let current = activePageElement;
-        
-        while (current && current.parentElement) {
-          current = current.parentElement;
-          if (current.classList.contains('artdeco-pagination') || 
-              current.querySelector('li.active') || 
-              current.querySelector('li.selected')) {
-            paginationContainer = current;
-            break;
-          }
-          
-          if (current === document.body) break;
-        }
-        
-        if (paginationContainer) {
-          const allButtons = Array.from(paginationContainer.querySelectorAll('button:not([disabled])'));
-          const activeButtonIndex = allButtons.findIndex(btn => {
-            return btn.closest('li')?.classList.contains('active') || 
-                   btn.closest('li')?.classList.contains('selected') ||
-                   btn.classList.contains('active') ||
-                   btn.classList.contains('selected') ||
-                   btn.parentElement?.classList.contains('active') ||
-                   btn.parentElement?.classList.contains('selected') ||
-                   btn.getAttribute('aria-current') === 'true';
+          const clickEvent = new MouseEvent('click', {
+            view: window,
+            bubbles: true,
+            cancelable: true
           });
           
-          if (activeButtonIndex !== -1 && activeButtonIndex < allButtons.length - 1) {
-            nextButton = allButtons[activeButtonIndex + 1];
-          }
-        }
-      }
-    }
-    
-    if (!nextButton) {
-      const allButtons = Array.from(document.querySelectorAll('button:not([disabled])'));
-      const possibleNextButtons = allButtons.filter(btn => {
-        const text = btn.textContent.toLowerCase();
-        const ariaLabel = btn.getAttribute('aria-label')?.toLowerCase() || '';
-        
-        return (text.includes('next') || ariaLabel.includes('next')) ||
-               btn.querySelector('svg[data-test-icon="arrow-right-small"]') ||
-               btn.querySelector('.artdeco-icon[type="arrow-right-small"]');
-      });
-      
-      if (possibleNextButtons.length > 0) {
-        nextButton = possibleNextButtons[0];
-      }
-    }
-    if (!nextButton) {
-      return false;
-    }
-
-    if (!nextButton || typeof nextButton.click !== 'function') {
-      if (nextButton) {
-        let current = nextButton;
-        let found = false;
-        for (let i = 0; i < 3; i++) {
-          if (!current || current === document.body) break;
-          
-          current = current.parentElement;
-          if (current && typeof current.click === 'function') {
-            nextButton = current;
-            found = true;
-            break;
-          }
-        }
-        
-        if (!found) {
-          try {
-            const clickEvent = new MouseEvent('click', {
-              view: window,
-              bubbles: true,
-              cancelable: true
-            });
-            
-            const clickResult = nextButton.dispatchEvent(clickEvent);
-            if (clickResult) {
-              handleAfterClick(currentPage, suppressScrolling);
-              return true;
-            }
-          } catch (eventError) {
-            console.error('Error dispatching click event:', eventError);
-          }
-          
-          if (nextButton.tagName === 'A' && nextButton.href) {
-            window.location.href = nextButton.href;
-            setTimeout(() => {
-              handleAfterClick(currentPage, suppressScrolling);
-            }, 2000);
-            
+          const clickResult = nextButton.dispatchEvent(clickEvent);
+          if (clickResult) {
+            handleAfterClick(currentPage, suppressScrolling);
             return true;
           }
-          return false;
+        } catch (eventError) {
+          console.error('Error dispatching click event:', eventError);
         }
-      } else {
+        
+        if (nextButton.tagName === 'A' && nextButton.href) {
+          window.location.href = nextButton.href;
+          setTimeout(() => {
+            handleAfterClick(currentPage, suppressScrolling);
+          }, 2000);
+          
+          return true;
+        }
+        
+        // If we tried everything and couldn't click the button
+        console.error('Found next button but could not click it');
         return false;
       }
     }
  
+    // If we have a clickable nextButton, try to click it
     try {
       nextButton.click();
       handleAfterClick(currentPage, suppressScrolling);
       return true;
     } catch (clickError) {
+      // If direct click fails, try dispatching an event
+      console.error('Error clicking next button (final):', clickError);
       try {
         const clickEvent = new MouseEvent('click', {
           view: window,
@@ -417,25 +427,33 @@ function navigateToNextJobPage(suppressScrolling = false) {
         handleAfterClick(currentPage, suppressScrolling);
         return true;
       } catch (eventError) {
+        console.error('Error dispatching click event (final):', eventError);
         return false;
       }
     }
   } catch (error) {
+    console.error('Error navigating to next page:', error);
     chrome.runtime.sendMessage({
       action: 'NEXT_PAGE_ERROR',
       error: 'Failed to navigate to next page: ' + error.message
     });
     return false;
   }
+}
 
-  function handleAfterClick(currentPage, suppressScrolling) {
-    suppressScrolling = false;
-    setTimeout(() => {
+function handleAfterClick(currentPage, suppressScrolling) {
+  // For the "Load and analyze next page" button feature, we always want to scroll
+  // to ensure all jobs are loaded, overriding any suppressScrolling parameter
+  suppressScrolling = false;
+
+  setTimeout(() => {
+    try {
       chrome.runtime.sendMessage({ 
         action: 'UPDATE_LOADING_MESSAGE', 
         message: 'New page loaded, preparing to analyze jobs...'
       });
 
+      // Always scroll through job listings to ensure all lazy-loaded jobs are captured
       scrollJobListingsToLoadAll().then(scrollSuccess => {
         if (scrollSuccess) {
           chrome.runtime.sendMessage({ 
@@ -443,55 +461,72 @@ function navigateToNextJobPage(suppressScrolling = false) {
             message: 'Extracting job listings...'
           });
           
-          const jobListings = extractJobListings();
-          
-          if (jobListings && jobListings.length > 0) {
-            chrome.runtime.sendMessage({ 
-              action: 'UPDATE_LOADING_MESSAGE', 
-              message: `Sending ${jobListings.length} jobs for analysis...`
-            });
-
-            chrome.runtime.sendMessage({
-              action: 'JOB_LISTINGS_EXTRACTED',
-              data: jobListings
-            }, response => {
+          try {
+            const jobListings = extractJobListings();
+            
+            if (jobListings && jobListings.length > 0) {
               chrome.runtime.sendMessage({ 
                 action: 'UPDATE_LOADING_MESSAGE', 
-                message: `Processing ${jobListings.length} job matches...`
+                message: `Sending ${jobListings.length} jobs for analysis...`
               });
-              
-              if (chrome.runtime.lastError) {
-                chrome.runtime.sendMessage({
-                  action: 'NEXT_PAGE_ERROR',
-                  error: 'Failed to analyze jobs on the next page.'
-                });
-                chrome.runtime.sendMessage({ 
-                  action: 'UPDATE_LOADING_MESSAGE', 
-                  message: 'Error sending jobs for analysis'
-                });
 
-                chrome.runtime.sendMessage({
-                  action: 'SET_LOADING_STATE',
-                  isLoading: false
-                });
-              } else {
-                chrome.runtime.sendMessage({
-                  action: 'NEXT_PAGE_SUCCESS',
-                  data: {
-                    jobCount: jobListings.length,
-                    currentPage: currentPage + 1
-                  }
-                });
+              chrome.runtime.sendMessage({
+                action: 'JOB_LISTINGS_EXTRACTED',
+                data: jobListings
+              }, response => {
                 chrome.runtime.sendMessage({ 
                   action: 'UPDATE_LOADING_MESSAGE', 
-                  message: `Successfully analyzed ${jobListings.length} jobs from page ${currentPage + 1}`
+                  message: `Processing ${jobListings.length} job matches...`
                 });
-              }
-            });
-          } else {
+                
+                if (chrome.runtime.lastError) {
+                  chrome.runtime.sendMessage({
+                    action: 'NEXT_PAGE_ERROR',
+                    error: 'Failed to analyze jobs on the next page.'
+                  });
+                  chrome.runtime.sendMessage({ 
+                    action: 'UPDATE_LOADING_MESSAGE', 
+                    message: 'Error sending jobs for analysis'
+                  });
+
+                  chrome.runtime.sendMessage({
+                    action: 'SET_LOADING_STATE',
+                    isLoading: false
+                  });
+                } else {
+                  chrome.runtime.sendMessage({
+                    action: 'NEXT_PAGE_SUCCESS',
+                    data: {
+                      jobCount: jobListings.length,
+                      currentPage: currentPage + 1
+                    }
+                  });
+                  chrome.runtime.sendMessage({ 
+                    action: 'UPDATE_LOADING_MESSAGE', 
+                    message: `Successfully analyzed ${jobListings.length} jobs from page ${currentPage + 1}`
+                  });
+                }
+              });
+            } else {
+              console.error('No job listings found after extraction');
+              chrome.runtime.sendMessage({ 
+                action: 'UPDATE_LOADING_MESSAGE', 
+                message: 'No jobs found on this page'
+              });
+              chrome.runtime.sendMessage({
+                action: 'SET_LOADING_STATE',
+                isLoading: false
+              });
+              chrome.runtime.sendMessage({
+                action: 'NEXT_PAGE_ERROR',
+                error: 'No jobs found on the next page.'
+              });
+            }
+          } catch (extractError) {
+            console.error('Error extracting job listings:', extractError);
             chrome.runtime.sendMessage({ 
               action: 'UPDATE_LOADING_MESSAGE', 
-              message: 'No jobs found on this page'
+              message: 'Error extracting job listings: ' + extractError.message
             });
             chrome.runtime.sendMessage({
               action: 'SET_LOADING_STATE',
@@ -499,10 +534,11 @@ function navigateToNextJobPage(suppressScrolling = false) {
             });
             chrome.runtime.sendMessage({
               action: 'NEXT_PAGE_ERROR',
-              error: 'No jobs found on the next page.'
+              error: 'Error extracting job listings: ' + extractError.message
             });
           }
         } else {
+          console.error('Failed to load jobs - scrolling was not successful');
           chrome.runtime.sendMessage({ 
             action: 'UPDATE_LOADING_MESSAGE', 
             message: 'Failed to load jobs on this page'
@@ -516,9 +552,37 @@ function navigateToNextJobPage(suppressScrolling = false) {
             error: 'Failed to load jobs on the next page.'
           });
         }
+      }).catch(scrollError => {
+        console.error('Error during scroll operation:', scrollError);
+        chrome.runtime.sendMessage({ 
+          action: 'UPDATE_LOADING_MESSAGE', 
+          message: 'Error loading jobs: ' + scrollError.message
+        });
+        chrome.runtime.sendMessage({
+          action: 'SET_LOADING_STATE',
+          isLoading: false
+        });
+        chrome.runtime.sendMessage({
+          action: 'NEXT_PAGE_ERROR',
+          error: 'Error during job loading: ' + scrollError.message
+        });
       });
-    }, 2000);
-  }
+    } catch (error) {
+      console.error('Error in handleAfterClick:', error);
+      chrome.runtime.sendMessage({ 
+        action: 'UPDATE_LOADING_MESSAGE', 
+        message: 'Error processing next page: ' + error.message
+      });
+      chrome.runtime.sendMessage({
+        action: 'SET_LOADING_STATE',
+        isLoading: false
+      });
+      chrome.runtime.sendMessage({
+        action: 'NEXT_PAGE_ERROR',
+        error: 'Error processing next page: ' + error.message
+      });
+    }
+  }, 2000);
 }
 
 function scrollJobListingsToLoadAll() {
@@ -890,64 +954,122 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
       return true; // Keep message channel open for async response
     } 
+    else if (message.action === 'TOGGLE_SIDEBAR') {
+      // This action is triggered when the user clicks the extension icon in the toolbar
+      console.log('Received request to toggle sidebar');
+      
+      // Check if UI elements exist, if not initialize them
+      if (!document.getElementById('job-analyzer-floating-btn') || !document.getElementById('job-analyzer-sidebar')) {
+        console.log('UI elements not found, initializing first...');
+        initialize();
+        // Give time for elements to be created
+        setTimeout(() => toggleSidebar(), 500);
+      } else {
+        toggleSidebar();
+      }
+      
+      function toggleSidebar() {
+        try {
+          const sidebar = document.getElementById('job-analyzer-sidebar');
+          
+          if (sidebar) {
+            // Toggle the sidebar open/closed
+            if (sidebar.classList.contains('open')) {
+              sidebar.classList.remove('open');
+              document.body.classList.remove('job-analyzer-sidebar-open');
+            } else {
+              sidebar.classList.add('open');
+              document.body.classList.add('job-analyzer-sidebar-open');
+              // If opening the sidebar, inject the React app
+              try {
+                injectReactApp();
+              } catch (injectError) {
+                console.error('Error injecting React app:', injectError);
+              }
+            }
+            
+            sendResponse({ success: true });
+          } else {
+            console.error('Sidebar element not found');
+            sendResponse({ success: false, error: 'Sidebar element not found' });
+          }
+        } catch (error) {
+          console.error('Error toggling sidebar:', error);
+          sendResponse({ success: false, error: 'Error toggling sidebar: ' + error.message });
+        }
+      }
+      
+      return true; // Keep message channel open for async response
+    }
     else if (message.action === 'LOAD_NEXT_PAGE_JOBS') {
       // This action is triggered when the user clicks to load the next page
       console.log('Received request to load next page jobs - starting the sequence');
       
-      // First clear any existing data
-      chrome.runtime.sendMessage({
-        action: 'CLEAR_EXISTING_JOBS',
-        message: 'Clearing existing job data before new page load'
-      });
-      
-      // Configure the loading message system
-      chrome.runtime.sendMessage({ 
-        action: 'CONFIGURE_LOADING_MESSAGE', 
-        enabled: true,
-        defaultMessage: 'Navigating to next page...'
-      });
-      
-      // Show initial loading message
-      chrome.runtime.sendMessage({ 
-        action: 'UPDATE_LOADING_MESSAGE', 
-        message: 'Navigating to next page of job listings...'
-      });
-      
-      // Set loading state to ensure loading indicator is visible
-      chrome.runtime.sendMessage({
-        action: 'SET_LOADING_STATE',
-        isLoading: true
-      });
-      
-      // Always set suppressScrolling to false to ensure we always scroll
-      const suppressScrolling = false;
-      console.log(`Always enabling scrolling on next page: suppressScrolling = ${suppressScrolling}`);
-      
-      // Navigate to the next page
-      console.log('Step 1: Navigating to next page');
-      const success = navigateToNextJobPage(suppressScrolling);
-
-      if (success) {
-        // Wait for the new page to load
-        console.log('Step 1 complete: Navigation successful, waiting for page to load');
-        
-        // We don't need the rest of this handler as the navigateToNextJobPage function
-        // will now handle scrolling, extraction, and sending the NEXT_PAGE_SUCCESS message
-        sendResponse({ success: true });
-      } else {
-        // Update loading message to indicate failure
-        chrome.runtime.sendMessage({ 
-          action: 'UPDATE_LOADING_MESSAGE', 
-          message: 'Failed to navigate to next page'
+      try {
+        // First clear any existing data
+        chrome.runtime.sendMessage({
+          action: 'CLEAR_EXISTING_JOBS',
+          message: 'Clearing existing job data before new page load'
         });
         
-        // Reset loading state
+        // Configure the loading message system
+        chrome.runtime.sendMessage({ 
+          action: 'CONFIGURE_LOADING_MESSAGE', 
+          enabled: true,
+          defaultMessage: 'Navigating to next page...'
+        });
+        
+        // Show initial loading message
+        chrome.runtime.sendMessage({ 
+          action: 'UPDATE_LOADING_MESSAGE', 
+          message: 'Navigating to next page of job listings...'
+        });
+        
+        // Set loading state to ensure loading indicator is visible
+        chrome.runtime.sendMessage({
+          action: 'SET_LOADING_STATE',
+          isLoading: true
+        });
+        
+        // Always force scrolling to be enabled for the "Load and analyze next page" button
+        // This ensures we capture all lazy-loaded jobs
+        const suppressScrolling = false;
+        console.log(`Always enabling scrolling on next page to load all jobs`);
+        
+        // Navigate to the next page
+        console.log('Step 1: Navigating to next page');
+        const success = navigateToNextJobPage(suppressScrolling);
+
+        if (success) {
+          console.log('Step 1 complete: Navigation successful, waiting for page to load');
+          // We don't need the rest here - handleAfterClick in navigateToNextJobPage will handle the rest
+          sendResponse({ success: true });
+        } else {
+          chrome.runtime.sendMessage({ 
+            action: 'UPDATE_LOADING_MESSAGE', 
+            message: 'Failed to navigate to next page'
+          });
+          
+          chrome.runtime.sendMessage({
+            action: 'SET_LOADING_STATE',
+            isLoading: false
+          });
+          
+          sendResponse({ success: false, error: 'Could not navigate to next page' });
+        }
+      } catch (error) {
+        console.error('Error in LOAD_NEXT_PAGE_JOBS handler:', error);
+        chrome.runtime.sendMessage({ 
+          action: 'UPDATE_LOADING_MESSAGE', 
+          message: 'Error navigating to next page: ' + error.message
+        });
+        
         chrome.runtime.sendMessage({
           action: 'SET_LOADING_STATE',
           isLoading: false
         });
         
-        sendResponse({ success: false, error: 'Could not navigate to next page' });
+        sendResponse({ success: false, error: 'Error navigating to next page: ' + error.message });
       }
       
       return true; // Keep message channel open for async response
@@ -1124,9 +1246,37 @@ function findAndClickJobCard(jobId) {
   }
 }
 
+// Function to inject the React app into the sidebar
+function injectReactApp() {
+  // Check if the React app is already injected
+  if (document.getElementById('job-analyzer-app-injected')) {
+    return;
+  }
+
+  // Create a flag to prevent multiple injections
+  const flag = document.createElement('div');
+  flag.id = 'job-analyzer-app-injected';
+  flag.style.display = 'none';
+  document.body.appendChild(flag);
+
+  // Notify background script to inject the React app
+  chrome.runtime.sendMessage({
+    action: 'INJECT_REACT_APP',
+    target: 'job-analyzer-content'
+  });
+}
+
 function initialize() {
   try {
-    // Add CSS for highlighting
+    // Check if already initialized
+    if (document.getElementById('job-analyzer-floating-btn') || document.getElementById('job-analyzer-sidebar')) {
+      console.log('LinkedIn Job Analyzer is already initialized on this page.');
+      return;
+    }
+
+    console.log('Initializing LinkedIn Job Analyzer UI...');
+
+    // Add CSS for highlighting and sidebar UI
     const style = document.createElement('style');
     style.textContent = `
       .job-analyzer-highlighted {
@@ -1137,22 +1287,234 @@ function initialize() {
         z-index: 100;
         position: relative;
       }
+
+      /* Floating button styles */
+      #job-analyzer-floating-btn {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        background-color: #0A66C2;
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        z-index: 999999 !important;
+        transition: all 0.3s ease;
+        border: none;
+        opacity: 0.9;
+      }
+
+      #job-analyzer-floating-btn:hover {
+        transform: scale(1.1);
+        box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
+        opacity: 1;
+      }
+
+      #job-analyzer-floating-btn img {
+        width: 30px;
+        height: 30px;
+      }
+
+      /* Hide floating button when sidebar is open */
+      #job-analyzer-sidebar.open ~ #job-analyzer-floating-btn,
+      body.job-analyzer-sidebar-open #job-analyzer-floating-btn {
+        display: none !important;
+      }
+
+      /* Sidebar styles */
+      #job-analyzer-sidebar {
+        position: fixed;
+        top: 0;
+        right: -400px;
+        width: 400px;
+        height: 100vh;
+        background-color: white;
+        box-shadow: -3px 0 15px rgba(0, 0, 0, 0.2);
+        z-index: 999998 !important;
+        transition: right 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        border-left: 1px solid #e0e0e0;
+      }
+
+      #job-analyzer-sidebar.open {
+        right: 0;
+      }
+
+      /* Close button styles */
+      #job-analyzer-close-btn {
+        position: absolute;
+        top: 16px;
+        right: 10px;
+        width: 30px;
+        height: 30px;
+        background: transparent;
+        border: none;
+        cursor: pointer;
+        font-size: 30px;
+        line-height: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 999999 !important;
+        color: white;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        transition: opacity 0.2s ease;
+      }
+      
+      #job-analyzer-close-btn:hover {
+        color: white;
+        opacity: 0.8;
+      }
+
+      /* Sidebar content container */
+      #job-analyzer-content {
+        flex: 1;
+        overflow: hidden;
+        padding: 0;
+        margin: 0;
+        width: 100%;
+        height: 100%;
+      }
+      
+      /* Ensure the iframe inside doesn't create unnecessary scrollbars */
+      #job-analyzer-iframe {
+        overflow: auto !important;
+      }
     `;
     document.head.appendChild(style);
+
+    // Create floating button
+    const floatingBtn = document.createElement('button');
+    floatingBtn.id = 'job-analyzer-floating-btn';
+    floatingBtn.innerHTML = `
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4ZM20 18H4V6H20V18Z" fill="white"/>
+        <path d="M6 10H8V17H6V10Z" fill="white"/>
+        <path d="M13 7H11V17H13V7Z" fill="white"/>
+        <path d="M16 13H18V17H16V13Z" fill="white"/>
+        <circle cx="18.5" cy="7.5" r="1.5" fill="white"/>
+      </svg>
+    `;
+    floatingBtn.title = "Open LinkedIn Job Analyzer";
+    document.body.appendChild(floatingBtn);
+
+    // Create sidebar
+    const sidebar = document.createElement('div');
+    sidebar.id = 'job-analyzer-sidebar';
+    
+    // Add close button
+    const closeBtn = document.createElement('button');
+    closeBtn.id = 'job-analyzer-close-btn';
+    closeBtn.innerHTML = '&times;';
+    sidebar.appendChild(closeBtn);
+
+    // Create content container for the React app
+    const content = document.createElement('div');
+    content.id = 'job-analyzer-content';
+    sidebar.appendChild(content);
+
+    // Add sidebar to the page
+    document.body.appendChild(sidebar);
+
+    // Add event listeners
+    floatingBtn.addEventListener('click', () => {
+      sidebar.classList.add('open');
+      document.body.classList.add('job-analyzer-sidebar-open');
+      injectReactApp();
+    });
+
+    closeBtn.addEventListener('click', () => {
+      sidebar.classList.remove('open');
+      document.body.classList.remove('job-analyzer-sidebar-open');
+    });
+
+    // Verify that elements were added to the DOM
     setTimeout(() => {
       try {
-        setupJobListingsObserver();
-        chrome.runtime.sendMessage({
-          action: 'CONTENT_SCRIPT_READY',
-          message: 'LinkedIn Job Analyzer content script is ready - waiting for user to click Analyze'
-        });
+        // Check if elements exist in the DOM
+        const btnExists = document.getElementById('job-analyzer-floating-btn');
+        const sidebarExists = document.getElementById('job-analyzer-sidebar');
+        
+        if (!btnExists || !sidebarExists) {
+          console.error('LinkedIn Job Analyzer UI elements were not properly added to the page.');
+          // Try re-initializing
+          reinitialize();
+        } else {
+          console.log('LinkedIn Job Analyzer UI successfully initialized.');
+          setupJobListingsObserver();
+          chrome.runtime.sendMessage({
+            action: 'CONTENT_SCRIPT_READY',
+            message: 'LinkedIn Job Analyzer content script is ready - waiting for user to click the floating button'
+          });
+        }
       } catch (initError) {
         console.error('Error during initialization:', initError);
       }
-    }, 3000);
+    }, 1000);
   } catch (error) {
     console.error('Error initializing content script:', error);
+    // Try to re-initialize after a delay
+    setTimeout(reinitialize, 2000);
   }
 }
 
-initialize(); 
+// Function to re-initialize if the first attempt fails
+function reinitialize() {
+  try {
+    // Remove any existing elements
+    const existingBtn = document.getElementById('job-analyzer-floating-btn');
+    const existingSidebar = document.getElementById('job-analyzer-sidebar');
+    
+    if (existingBtn) existingBtn.remove();
+    if (existingSidebar) existingSidebar.remove();
+    
+    // Initialize again
+    initialize();
+  } catch (error) {
+    console.error('Error re-initializing content script:', error);
+  }
+}
+
+// Call initialize when the content script loads
+console.log('LinkedIn Job Analyzer content script loaded');
+initialize();
+
+// Add multiple initialization attempts to ensure the UI is created
+window.addEventListener('load', () => {
+  console.log('Window load event fired');
+  if (!document.getElementById('job-analyzer-floating-btn')) {
+    console.log('Initializing on window load...');
+    initialize();
+  }
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('DOMContentLoaded event fired');
+  if (!document.getElementById('job-analyzer-floating-btn')) {
+    console.log('Initializing on DOMContentLoaded...');
+    initialize();
+  }
+});
+
+// Backup initialization in case the other events have already fired
+setTimeout(() => {
+  if (!document.getElementById('job-analyzer-floating-btn')) {
+    console.log('Backup initialization...');
+    initialize();
+  }
+}, 2000);
+
+// And one more attempt after the page has had time to fully stabilize
+setTimeout(() => {
+  if (!document.getElementById('job-analyzer-floating-btn')) {
+    console.log('Final initialization attempt...');
+    initialize();
+  }
+}, 5000); 

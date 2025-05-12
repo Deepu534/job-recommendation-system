@@ -389,7 +389,7 @@ export function useJobRankings({
     
     chrome.runtime.sendMessage({
       action: 'LOAD_NEXT_PAGE_JOBS',
-      suppressScrolling: true // Signal that scrolling is handled by content script
+      suppressScrolling: false // Ensure scrolling is enabled to load all jobs
     });
     
     // Don't need to handle the response here - our message listener will 

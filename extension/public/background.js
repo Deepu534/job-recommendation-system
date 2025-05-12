@@ -18,6 +18,38 @@ chrome.runtime.onInstalled.addListener(() => {
   });
 });
 
+// Handle clicks on the extension icon in the toolbar
+chrome.action.onClicked.addListener((tab) => {
+  if (tab.url && tab.url.includes('linkedin.com')) {
+    // Send message to content script to toggle the sidebar
+    chrome.tabs.sendMessage(tab.id, { 
+      action: 'TOGGLE_SIDEBAR',
+      source: 'toolbar_icon'
+    }).catch(error => {
+      console.error('Error toggling sidebar:', error);
+      
+      // If the content script isn't loaded yet, reload the tab and try again
+      if (error.message.includes('Could not establish connection')) {
+        // Reload the tab to ensure content script is loaded
+        chrome.tabs.reload(tab.id, {}, () => {
+          // After reload, wait a moment and try again
+          setTimeout(() => {
+            chrome.tabs.sendMessage(tab.id, { 
+              action: 'TOGGLE_SIDEBAR',
+              source: 'toolbar_icon'
+            }).catch(secondError => {
+              console.error('Error toggling sidebar after reload:', secondError);
+            });
+          }, 2000);
+        });
+      }
+    });
+  } else {
+    // If not on LinkedIn, open LinkedIn in a new tab
+    chrome.tabs.create({ url: 'https://www.linkedin.com/' });
+  }
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   switch (message.action) {
     case 'JOB_LISTINGS_EXTRACTED':
@@ -109,6 +141,36 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       
     case 'NEXT_PAGE_SUCCESS':
       handleNextPageSuccess(message);
+      break;
+      
+    case 'INJECT_REACT_APP':
+      // Inject the React app into the sidebar
+      if (sender.tab && sender.tab.id) {
+        try {
+          chrome.scripting.executeScript({
+            target: { tabId: sender.tab.id },
+            func: injectAppToSidebar,
+            args: [message.target]
+          })
+          .then(results => {
+            if (results && results[0] && results[0].result === true) {
+              sendResponse({ success: true });
+            } else {
+              console.error('Failed to inject React app: Script executed but returned false');
+              sendResponse({ success: false, error: 'Failed to inject app - target element not found' });
+            }
+          })
+          .catch(err => {
+            console.error('Error executing script to inject React app:', err);
+            sendResponse({ success: false, error: err.message });
+          });
+        } catch (error) {
+          console.error('Error injecting React app:', error);
+          sendResponse({ success: false, error: error.message });
+        }
+      } else {
+        sendResponse({ success: false, error: 'Invalid tab ID' });
+      }
       break;
       
     default:
@@ -448,4 +510,48 @@ function handleNextPageSuccess(message) {
     allJobRankings: jobRankings,
     currentDisplayIndex: displayLimit
   });
+}
+
+// Function to be injected into the page to handle loading the React app
+function injectAppToSidebar(targetId) {
+  try {
+    console.log(`Injecting React app into element with ID: ${targetId}`);
+    
+    // Find the target element
+    const targetElement = document.getElementById(targetId);
+    if (!targetElement) {
+      console.error(`Target element with ID "${targetId}" not found`);
+      return false;
+    }
+    
+    // Clear any existing content
+    targetElement.innerHTML = '';
+    
+    // Create iframe to load the React app
+    const iframe = document.createElement('iframe');
+    iframe.src = chrome.runtime.getURL('index.html');
+    iframe.id = 'job-analyzer-iframe';
+    iframe.style.width = '100%';
+    iframe.style.height = '100%';
+    iframe.style.border = 'none';
+    iframe.style.margin = '0';
+    iframe.style.padding = '0';
+    iframe.style.overflow = 'hidden';
+    
+    // Add error handling for iframe loading
+    iframe.onerror = (error) => {
+      console.error('Error loading iframe:', error);
+      targetElement.innerHTML = '<div style="padding: 20px; text-align: center; color: red;">Error loading application. Please try refreshing the page.</div>';
+      return false;
+    };
+    
+    // Add the iframe to the target element
+    targetElement.appendChild(iframe);
+    
+    console.log('React app iframe injected successfully');
+    return true;
+  } catch (error) {
+    console.error('Error injecting React app to sidebar:', error);
+    return false;
+  }
 }
