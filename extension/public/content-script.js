@@ -57,8 +57,18 @@ function extractJobListings() {
         const titleElement = findElementWithSelectors(card, titleSelectors);
         const title = titleElement ? titleElement.textContent.trim() : '';
 
-        const companySelector = '.artdeco-entity-lockup__subtitle';
-        const companyElement = findElementWithSelectors(card, companySelector);
+        const companySelectors = [
+          '.artdeco-entity-lockup__subtitle',
+          '[data-control-name="job_card_company_link"]',
+          'span[class*="company"]',
+          'div[class*="company"]',
+          'a[href*="company"]',
+          '.job-card-container__company-name',
+          '.job-card-container__primary-description',
+          '.job-card-container__subtitle',
+          '.artdeco-entity-lockup__subtitle'
+        ];
+        const companyElement = findElementWithSelectors(card, companySelectors);
         const company = companyElement ? companyElement.textContent.trim() : '';
 
         const locationSelectors = [
