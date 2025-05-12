@@ -52,56 +52,24 @@ function extractJobListings() {
     jobCards.forEach((card, index) => {
       try {
         const titleSelectors = [
-          '.job-card-container__link',
-          'a[data-control-name="job_card_title_click"]',
-          'h3',
-          'a[href*="jobs/view"]',
-          'a[class*="job-title"]',
-          'a[class*="title"]',
-          '.job-card-list__title',
-          '.job-card-container__link',
           '.artdeco-entity-lockup__title',
-          '.jobs-unified-top-card__job-title',
-          'h2', 'h3', 'h4',
-          'a'
         ];
         const titleElement = findElementWithSelectors(card, titleSelectors);
         const title = titleElement ? titleElement.textContent.trim() : '';
 
-        const companySelectors = [
-          '.artdeco-entity-lockup__subtitle',
-          '[data-control-name="job_card_company_link"]',
-          'span[class*="company"]',
-          'div[class*="company"]',
-          'a[href*="company"]',
-          '.job-card-container__company-name',
-          '.job-card-container__primary-description',
-          '.job-card-container__subtitle',
-          '.artdeco-entity-lockup__subtitle'
-        ];
-        const companyElement = findElementWithSelectors(card, companySelectors);
+        const companySelector = '.artdeco-entity-lockup__subtitle';
+        const companyElement = findElementWithSelectors(card, companySelector);
         const company = companyElement ? companyElement.textContent.trim() : '';
 
         const locationSelectors = [
-          '.job-card-container__metadata-wrapper',
           '.artdeco-entity-lockup__caption',
-          '.job-card-container__location',
-          'span[class*="location"]',
-          'div[class*="location"]',
-          '.job-card-container__metadata-item',
-          '.artdeco-entity-lockup__caption',
-          'span[class*="location"]'
         ];
         const locationElement = findElementWithSelectors(card, locationSelectors);
         const location = locationElement ? locationElement.textContent.trim() : '';
 
         const linkSelectors = [
           '.job-card-container__link',
-          'a[data-control-name="job_card_title_click"]',
           'a[href*="jobs/view"]',
-          'a[class*="job-title"]',
-          'a[href*="linkedin.com/jobs"]',
-          'a'
         ];
         const linkElement = findElementWithSelectors(card, linkSelectors);
         const jobUrl = linkElement ? linkElement.href : '';
