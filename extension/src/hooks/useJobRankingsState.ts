@@ -42,24 +42,31 @@ export function useJobRankingsState({ rankings, hasMoreJobs }: UseJobRankingsSta
   useEffect(() => {
     console.log('JobRankings useEffect - rankings length:', rankings.length, 'hasMoreJobs prop:', hasMoreJobs);
     
-    if (rankings.length > 0) {
-      // Check storage for more jobs
-      chrome.storage.local.get(['allJobRankings', 'currentDisplayIndex'], (result) => {
-        const allRankings = result.allJobRankings || [];
-        const currentIndex = result.currentDisplayIndex || rankings.length;
-        const moreJobsAvailable = allRankings.length > currentIndex;
-        
-        console.log('JobRankings check - Local storage has', allRankings.length, 'jobs, currently showing', currentIndex);
-        console.log('JobRankings check - More jobs available:', moreJobsAvailable);
-        
-        // Update state with job counts
+    // Always check storage for more jobs, even when rankings is empty
+    chrome.storage.local.get(['allJobRankings', 'currentDisplayIndex'], (result) => {
+      const allRankings = result.allJobRankings || [];
+      const currentIndex = result.currentDisplayIndex || rankings.length;
+      const moreJobsAvailable = allRankings.length > currentIndex;
+      
+      console.log('JobRankings check - Local storage has', allRankings.length, 'jobs, currently showing', currentIndex);
+      console.log('JobRankings check - More jobs available:', moreJobsAvailable);
+      
+      // Update state with job counts
+      if (allRankings.length > 0) {
         setTotalJobs(allRankings.length);
         setRemainingJobs(Math.max(0, allRankings.length - currentIndex));
-        
-        // Update local state
-        setLocalHasMoreJobs(moreJobsAvailable);
-      });
-    }
+      } else if (rankings.length > 0) {
+        // Fallback to rankings if no allRankings
+        setTotalJobs(rankings.length);
+        setRemainingJobs(0);
+      }
+      
+      // Update local state - force true if prop is true to handle parent state correctly
+      setLocalHasMoreJobs(hasMoreJobs || moreJobsAvailable);
+      
+      // Log for debugging
+      console.log('Jobs data - Total:', allRankings.length, 'Showing:', currentIndex, 'Remaining:', allRankings.length - currentIndex);
+    });
   }, [rankings, hasMoreJobs]);
 
   // Debug logs for pagination

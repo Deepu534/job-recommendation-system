@@ -305,9 +305,19 @@ async function handleJobMatching(sendResponse, options = {}) {
     const { start = 0, limit = 10, displayLimit = null } = options;
     const results = await matchJobs(start, limit);
     
+    // Always store all rankings in local storage for pagination
+    const displayCount = displayLimit || results.rankings.length;
+    chrome.storage.local.set({ 
+      jobRankings: results.rankings.slice(0, displayCount),
+      allJobRankings: results.rankings,
+      currentDisplayIndex: displayCount
+    }, () => {
+      console.log(`Stored all ${results.rankings.length} ranked jobs in local storage for pagination. Displaying: ${displayCount}`);
+    });
+    
     sendResponse({ 
       success: true, 
-      jobRankings: results.rankings,
+      jobRankings: displayLimit ? results.rankings.slice(0, displayLimit) : results.rankings,
       pagination: results.pagination
     });
   } catch (error) {

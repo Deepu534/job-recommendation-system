@@ -1,13 +1,8 @@
 import React from 'react';
-import { 
-  Box, 
-  Typography, 
-  Button,
-} from '@mui/material';
-import WorkIcon from '@mui/icons-material/Work';
-import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import { Box, Typography, Button } from '@mui/material';
+import AnalysisIcon from '@mui/icons-material/InsightsOutlined';
 
-export interface EmptyJobsMessageProps {
+interface EmptyJobsMessageProps {
   params: {
     onRefresh: () => void;
   }
@@ -18,28 +13,29 @@ function EmptyJobsMessage({ params }: EmptyJobsMessageProps) {
   
   return (
     <Box sx={{ 
+      my: 2, 
+      p: 2, 
       textAlign: 'center',
-      p: 3,
-      width: '100%'
+      border: '1px solid',
+      borderColor: 'divider',
+      borderRadius: 1,
+      backgroundColor: 'background.paper'
     }}>
-      <WorkIcon sx={{ fontSize: 60, color: 'primary.light', mb: 2 }} />
-      <Typography variant="h6" align="center" gutterBottom>
-        No Jobs Analyzed Yet
-      </Typography>
-      <Typography variant="body1" align="center" color="text.secondary" paragraph>
-        Upload your resume (if you haven't already) and click "Analyze Jobs" to rank all LinkedIn job listings by their match with your experience and skills. <br />
-        <br />
-        Note: Do not close this extension while we are processing your job matches.
-      </Typography>
-      <Button 
-        variant="contained"
-        color="primary"
-        startIcon={<AutoFixHighIcon />}
-        onClick={onRefresh}
-        sx={{ mt: 2 }}
+      <AnalysisIcon 
+        color="primary" 
+        sx={{ 
+          fontSize: 42, 
+          mb: 1.5,
+          opacity: 0.8 
+        }} 
+      />
+      <Typography 
+        variant="body1" 
+        gutterBottom
+        color="text.secondary"
       >
-        Scroll and Analyze Jobs
-      </Button>
+        Click the "Scroll & Analyze Jobs" button to analyze job listings on this page
+      </Typography>
     </Box>
   );
 }

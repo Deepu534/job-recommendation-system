@@ -1316,6 +1316,8 @@ function initialize() {
         z-index: 999999 !important;
         transition: all 0.3s ease;
         border: none;
+        padding: 0;
+        overflow: hidden;
         opacity: 0.9;
       }
 
@@ -1326,8 +1328,9 @@ function initialize() {
       }
 
       #job-analyzer-floating-btn img {
-        width: 30px;
-        height: 30px;
+        width: 36px;
+        height: 36px;
+        object-fit: contain;
       }
 
       /* Hide floating button when sidebar is open */
@@ -1403,15 +1406,11 @@ function initialize() {
     // Create floating button
     const floatingBtn = document.createElement('button');
     floatingBtn.id = 'job-analyzer-floating-btn';
-    floatingBtn.innerHTML = `
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M20 4H4C2.9 4 2 4.9 2 6V18C2 19.1 2.9 20 4 20H20C21.1 20 22 19.1 22 18V6C22 4.9 21.1 4 20 4ZM20 18H4V6H20V18Z" fill="white"/>
-        <path d="M6 10H8V17H6V10Z" fill="white"/>
-        <path d="M13 7H11V17H13V7Z" fill="white"/>
-        <path d="M16 13H18V17H16V13Z" fill="white"/>
-        <circle cx="18.5" cy="7.5" r="1.5" fill="white"/>
-      </svg>
-    `;
+    
+    // Use the Chrome extension icon image instead of the SVG
+    const iconURL = chrome.runtime.getURL('icons/icon48.png');
+    floatingBtn.innerHTML = `<img src="${iconURL}" alt="LinkedIn Job Analyzer" width="30" height="30">`;
+    
     floatingBtn.title = "Open LinkedIn Job Analyzer";
     document.body.appendChild(floatingBtn);
 

@@ -3,6 +3,8 @@ import {
   Box, 
   List, 
   Divider,
+  Stack,
+  Button,
 } from '@mui/material';
 import { useJobRankingsState } from '../hooks/useJobRankingsState';
 
@@ -28,7 +30,8 @@ const styles = {
   scrollContainer: {
     overflowY: 'auto',
     maxHeight: 'calc(100vh - 300px)',
-    width: '100%'
+    width: '100%',
+    pb: 7,
   },
   list: {
     width: '100%',
@@ -59,6 +62,9 @@ export interface JobRankingsProps {
   hasMoreJobs?: boolean;
   isLoadingMore?: boolean;
   isLoadingNextPage?: boolean;
+  showAnalysisButton?: boolean;
+  handleMatchJobs?: () => void;
+  resumeUploaded?: boolean;
 }
 
 // RORO pattern for JobListProps
@@ -142,27 +148,41 @@ function LoadingButtons({ params }: LoadingButtonsProps) {
   } = params;
 
   return (
-    <>
-      {/* Load More Button */}
-      {hasMoreJobs && (
-        <LoadMoreButton 
-          params={{
-            onLoadMore,
-            isLoading: isLoadingMore,
-            remainingJobs,
-            totalJobs
-          }}
-        />
-      )}
-      
-      {/* Next Page Button */}
-      <NextPageButton 
-        params={{
-          onLoadNextPage,
-          isLoading: isLoadingNextPage
-        }}
-      />
-    </>
+    <Box sx={{ 
+      width: '100%',
+      pt: 1,
+      pb: 1,
+      position: 'sticky',
+      bottom: 0,
+      backgroundColor: 'background.paper',
+      zIndex: 1,
+      boxShadow: '0px -4px 12px rgba(0,0,0,0.08)',
+      marginTop: 'auto' // Push to bottom of container
+    }}>
+      <Stack spacing={1} width="95%" mx="auto">
+        {/* Load More Button: Show if there are more jobs to load from the current set */}
+        {hasMoreJobs && onLoadMore && (
+          <LoadMoreButton 
+            params={{
+              onLoadMore,
+              isLoading: isLoadingMore,
+              remainingJobs,
+              totalJobs
+            }}
+          />
+        )}
+        
+        {/* Next Page Button: Show if there are no more jobs from the current set, but a next page might exist */}
+        {!hasMoreJobs && onLoadNextPage && (
+          <NextPageButton 
+            params={{
+              onLoadNextPage,
+              isLoading: isLoadingNextPage
+            }}
+          />
+        )}
+      </Stack>
+    </Box>
   );
 }
 
@@ -176,7 +196,10 @@ function JobRankings({
   onClearResults,
   hasMoreJobs = false, 
   isLoadingMore = false,
-  isLoadingNextPage = false
+  isLoadingNextPage = false,
+  showAnalysisButton = false,
+  handleMatchJobs,
+  resumeUploaded = false
 }: JobRankingsProps) {
   // Use custom hook for state management
   const {
@@ -247,6 +270,45 @@ function JobRankings({
               isLoadingNextPage
             }}
           />
+        </Box>
+      )}
+      
+      {/* Scroll & Analyze button for empty state */}
+      {showAnalysisButton && resumeUploaded && handleMatchJobs && (
+        <Box sx={{ 
+          width: '100%',
+          pt: 1,
+          pb: 1,
+          position: 'sticky',
+          bottom: 0,
+          backgroundColor: 'background.paper',
+          zIndex: 1,
+          borderTop: '1px solid',
+          borderColor: 'divider',
+          boxShadow: '0px -4px 12px rgba(0,0,0,0.1)',
+          marginTop: 'auto' // Push to bottom of container
+        }}>
+          <Stack spacing={1} width="95%" mx="auto">
+            <Button
+              variant="contained"
+              color="primary"
+              size="large"
+              fullWidth
+              onClick={handleMatchJobs}
+              sx={{ 
+                py: 2, 
+                fontSize: '0.95rem',
+                fontWeight: 'bold',
+                boxShadow: 3,
+                borderRadius: 1,
+                '&:hover': {
+                  boxShadow: 5
+                }
+              }}
+            >
+              Scroll & Analyze Jobs
+            </Button>
+          </Stack>
         </Box>
       )}
     </Box>

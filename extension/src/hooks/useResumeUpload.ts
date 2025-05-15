@@ -3,78 +3,87 @@ import { useState, useEffect } from 'react';
 interface UseResumeUploadProps {
   setIsLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
-  setTabValue: (value: number) => void;
+  setTabValue?: (value: number) => void;
 }
 
-export function useResumeUpload({ setIsLoading, setError, setTabValue }: UseResumeUploadProps) {
-  // State for resume uploaded status
+export function useResumeUpload({ 
+  setIsLoading, 
+  setError,
+  setTabValue 
+}: UseResumeUploadProps) {
   const [resumeUploaded, setResumeUploaded] = useState(false);
-  
-  // Check resume status on init
+
+  // Check if resume data exists in storage
   useEffect(() => {
-    chrome.runtime.sendMessage({ action: 'GET_RESUME_STATUS' }, (response) => {
-      console.log('Resume status response:', response);
-      if (response && response.resumeUploaded) {
+    chrome.storage.local.get(['resumeData'], (result) => {
+      if (result.resumeData) {
         setResumeUploaded(true);
-        console.log('Resume is uploaded');
-        setTabValue(1);
-      } else {
-        setResumeUploaded(false);
-        console.log('No resume uploaded yet');
       }
     });
-  }, [setTabValue]);
-  
-  // Handle resume upload
-  const handleResumeUpload = (resumeData: string) => {
-    if (!resumeData) {
-      console.log('Resetting resume state');
+
+    // Also check by asking the background script for resume status
+    chrome.runtime.sendMessage({ action: 'GET_RESUME_STATUS' }, (response) => {
+      if (response && response.resumeUploaded) {
+        setResumeUploaded(true);
+      }
+    });
+  }, []);
+
+  const handleResumeUpload = (data: string) => {
+    if (data === '') {
+      // Handle clear resume case
+      console.log('Clearing resume data');
       setResumeUploaded(false);
-      setError(null);
-      
-      // Clear resume data in background script
-      chrome.runtime.sendMessage({ 
-        action: 'UPLOAD_RESUME', 
-        data: '' 
+      chrome.runtime.sendMessage({
+        action: 'UPLOAD_RESUME',
+        data: ''
+      }, (response) => {
+        if (chrome.runtime.lastError) {
+          console.error('Error clearing resume:', chrome.runtime.lastError);
+          setError('Error clearing resume data');
+        } else if (response.error) {
+          console.error('Error clearing resume:', response.error);
+          setError(`Error clearing resume: ${response.error}`);
+        } else {
+          console.log('Resume cleared successfully');
+          setError(null);
+        }
       });
-      
       return;
     }
-    
-    console.log('Uploading resume');
-    setError(null);
+
     setIsLoading(true);
-    setResumeUploaded(false); // Reset the state to avoid conflicting UI
-    
-    chrome.runtime.sendMessage({ 
-      action: 'UPLOAD_RESUME', 
-      data: resumeData
+    setError(null);
+
+    console.log('Uploading resume data...');
+    chrome.runtime.sendMessage({
+      action: 'UPLOAD_RESUME',
+      data
     }, (response) => {
-      console.log('Resume upload response:', response);
       setIsLoading(false);
       
-      if (response && response.success) {
-        setResumeUploaded(true);
-        setError(null); // Clear any previous errors
-        console.log('Resume uploaded successfully');
-        
-        // Switch to rankings tab
-        setTabValue(1);
-        
-        // No longer automatically match jobs after resume upload
-        // User will need to click the analyze/refresh button to initiate job matching
-      } else if (response && response.error) {
-        console.error('Error uploading resume:', response.error);
-        setError(`Error uploading resume: ${response.error}`);
-        setResumeUploaded(false); // Ensure we're in the correct state
+      if (chrome.runtime.lastError) {
+        console.error('Error uploading resume:', chrome.runtime.lastError);
+        setError('Error uploading resume. Please try again.');
+        return;
+      }
+      
+      if (response.error) {
+        console.error('Resume upload error:', response.error);
+        setError(`Error: ${response.error}`);
       } else {
-        console.error('Unknown error uploading resume');
-        setError('Unknown error uploading resume');
-        setResumeUploaded(false); // Ensure we're in the correct state
+        console.log('Resume uploaded successfully');
+        setResumeUploaded(true);
+        setError(null);
+        
+        // Navigate to the jobs tab if setTabValue is provided
+        if (setTabValue) {
+          setTabValue(1);
+        }
       }
     });
   };
-  
+
   return {
     resumeUploaded,
     handleResumeUpload

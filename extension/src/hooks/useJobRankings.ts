@@ -28,36 +28,47 @@ export function useJobRankings({
   
   // Initialize job rankings
   useEffect(() => {
+    console.log('useJobRankings initialized');
+    
     // Check for pagination status immediately
     chrome.storage.local.get(['allJobRankings', 'currentDisplayIndex'], (result) => {
       const allRankings = result.allJobRankings || [];
       const currentIndex = result.currentDisplayIndex || 0;
-      console.log('Initial check - Stored rankings:', allRankings.length, 'Current index:', currentIndex);
+      
+      console.log('Initializing - Total rankings in storage:', allRankings.length, 'Current display index:', currentIndex);
       
       // If we have more jobs stored than we're displaying, enable the Load More button
       if (allRankings.length > currentIndex && currentIndex > 0) {
         setHasMoreJobs(true);
-        console.log('Initial check - More jobs available, setting hasMoreJobs to true');
+        console.log('Initializing - More jobs available (allRankings > currentIndex), setting hasMoreJobs to true');
+      } else {
+        setHasMoreJobs(false);
+        console.log('Initializing - No more jobs available or no jobs loaded yet');
       }
     });
 
     // Get job rankings if available
     chrome.runtime.sendMessage({ action: 'GET_JOB_RANKINGS' }, (response) => {
-      console.log('Job rankings response:', response);
+      console.log('GET_JOB_RANKINGS response:', response);
+      
       if (response && response.jobRankings && response.jobRankings.length > 0) {
         setJobRankings(response.jobRankings);
         console.log(`Found ${response.jobRankings.length} job rankings`);
         
-        // Also check if there are more jobs in storage
+        // Check if there are more jobs in storage
         chrome.storage.local.get(['allJobRankings', 'currentDisplayIndex'], (result) => {
           const allRankings = result.allJobRankings || [];
           const currentIndex = result.currentDisplayIndex || response.jobRankings.length;
-          console.log(`Stored rankings: ${allRankings.length}, current index: ${currentIndex}`);
+          
+          console.log(`Storage check - Total rankings: ${allRankings.length}, Current index: ${currentIndex}`);
           
           // If we have more jobs stored than we're displaying, enable the Load More button
           if (allRankings.length > currentIndex) {
             setHasMoreJobs(true);
-            console.log('More jobs available, enabling Load More button');
+            console.log('More jobs available in storage (allRankings > currentIndex), enabling Load More button');
+          } else {
+            setHasMoreJobs(false);
+            console.log('No more jobs available in storage (allRankings <= currentIndex)');
           }
         });
       } else {
@@ -85,34 +96,35 @@ export function useJobRankings({
         chrome.runtime.sendMessage({ 
           action: 'MATCH_JOBS',
           start: 0,
-          limit: message.data.jobCount || 100, // Process all extracted jobs
-          displayLimit: 10 // But only show top 10 initially in UI, matching behavior of first page
+          limit: message.data.jobCount || 100,
+          displayLimit: 10
         }, (matchResponse) => {
           console.log('Match jobs response after next page:', matchResponse);
           setIsLoading(false);
           
-          if (matchResponse && matchResponse.success && matchResponse.jobRankings) {
-            // Check if we have more than 10 results
-            const totalResults = matchResponse.jobRankings.length;
-            const initialBatchSize = 10;
-            const hasMore = totalResults > initialBatchSize;
+          if (matchResponse && matchResponse.success && matchResponse.jobRankings && matchResponse.pagination) {
+            // jobRankings from matchResponse is already sliced to displayLimit by background.js
+            setJobRankings(matchResponse.jobRankings);
+            // Use hasMore from the pagination object in the response
+            setHasMoreJobs(matchResponse.pagination.hasMore);
             
-            console.log(`Received ${totalResults} total ranked jobs from next page after language filtering`);
+            console.log(`Showing top ${matchResponse.jobRankings.length} jobs from next page.`);
+            console.log('Setting hasMoreJobs for next page to:', matchResponse.pagination.hasMore);
             
-            // Only show the top 10 jobs initially
-            setJobRankings(matchResponse.jobRankings.slice(0, initialBatchSize));
-            console.log(`Showing top ${initialBatchSize} jobs out of ${totalResults} total ranked jobs from next page`);
-            
-            // We'll have more jobs to show if the total is greater than initial batch size
-            setHasMoreJobs(hasMore);
-            console.log('Setting hasMoreJobs for next page to:', hasMore);
-            
-            // Store all rankings in storage for pagination
+            // Store all rankings in storage for pagination - background.js stores allJobRankings
+            // The matchResponse.jobRankings is already the display batch.
+            // We need to ensure allJobRankings is correctly populated in storage by background.js
+            // and that handleLoadMore uses it. Background.js's handleJobMatching stores `allJobRankings: results.rankings`
+            // and `jobRankings: results.rankings.slice(0, displayCount)`.
+            // So, the `allJobRankings` in storage should be correct.
+            // The `matchResponse` to the UI contains the sliced `jobRankings` for display
+            // and the correct `pagination.total` (for all jobs) and `pagination.hasMore`.
+            // We need to ensure `currentDisplayIndex` is set correctly based on the displayed batch.
             chrome.storage.local.set({ 
-              allJobRankings: matchResponse.jobRankings,
-              currentDisplayIndex: initialBatchSize
+              // allJobRankings is set by background.js
+              currentDisplayIndex: matchResponse.jobRankings.length 
             }, () => {
-              console.log(`Stored all ${totalResults} ranked jobs in local storage for pagination. Has more: ${hasMore}`);
+              console.log(`Displaying ${matchResponse.jobRankings.length} jobs. More available: ${matchResponse.pagination.hasMore}`);
             });
           } else if (matchResponse && matchResponse.error) {
             setError(`Error matching jobs: ${matchResponse.error}`);
@@ -249,42 +261,38 @@ export function useJobRankings({
           
           console.log(`Successfully extracted ${response.jobListings.length} job listings`);
           
-          // Now request job matching for ALL jobs, but with a display limit
-          console.log('Sending MATCH_JOBS message to backend for all jobs, with display pagination');
-          // Update loading message for API processing
-          setLoadingMessage('Processing job matches...');
+          setLoadingMessage('Matching jobs with your resume...');
+          
           chrome.runtime.sendMessage({ 
             action: 'MATCH_JOBS',
             start: 0,
-            limit: response.jobListings.length, // Process ALL jobs in the backend instead of just 10
-            displayLimit: 10 // But only show top 10 initially in UI
+            limit: 100, 
+            displayLimit: 10
           }, (matchResponse) => {
             console.log('Match jobs response:', matchResponse);
             setIsLoading(false);
             isMatchingJobsRef.current = false;
             
-            if (matchResponse && matchResponse.success && matchResponse.jobRankings) {
-              // Check if we have more than 10 results
-              const totalResults = matchResponse.jobRankings.length;
-              const initialBatchSize = 10;
-              const hasMore = totalResults > initialBatchSize;
+            if (matchResponse && matchResponse.success && matchResponse.jobRankings && matchResponse.pagination) {
+              // jobRankings from matchResponse is already sliced to displayLimit by background.js
+              setJobRankings(matchResponse.jobRankings);
+              // Use hasMore from the pagination object in the response
+              setHasMoreJobs(matchResponse.pagination.hasMore);
+
+              console.log(`Showing top ${matchResponse.jobRankings.length} jobs.`);
+              console.log('Setting hasMoreJobs to:', matchResponse.pagination.hasMore);
               
-              console.log(`Received ${totalResults} total ranked jobs from backend after language filtering`);
-              
-              // Only show the top 10 jobs initially
-              setJobRankings(matchResponse.jobRankings.slice(0, initialBatchSize));
-              console.log(`Showing top ${initialBatchSize} jobs out of ${totalResults} total ranked jobs`);
-              
-              // We'll have more jobs to show if the total is greater than initial batch size
-              setHasMoreJobs(hasMore);
-              console.log('Setting hasMoreJobs to:', hasMore);
-              
-              // Store all rankings in storage for pagination
+              // Store all rankings in storage for pagination - background.js stores allJobRankings
+              // The matchResponse.jobRankings is already the display batch.
+              // We need to ensure allJobRankings is correctly populated in storage by background.js
+              // and that handleLoadMore uses it. Background.js's handleJobMatching stores `allJobRankings: results.rankings`
+              // and `jobRankings: results.rankings.slice(0, displayCount)`.
+              // So, the `allJobRankings` in storage should be correct.
               chrome.storage.local.set({ 
-                allJobRankings: matchResponse.jobRankings,
-                currentDisplayIndex: initialBatchSize
+                // allJobRankings is set by background.js
+                currentDisplayIndex: matchResponse.jobRankings.length
               }, () => {
-                console.log(`Stored all ${totalResults} ranked jobs in local storage for pagination. Has more: ${hasMore}`);
+                console.log(`Displaying ${matchResponse.jobRankings.length} jobs. More available: ${matchResponse.pagination.hasMore}`);
               });
             } else if (matchResponse && matchResponse.error) {
               console.error('Error matching jobs:', matchResponse.error);
@@ -342,31 +350,27 @@ export function useJobRankings({
       
       // Calculate the next batch - show 10 more jobs
       const batchSize = 10;
-      const nextIndex = currentIndex + batchSize;
+      const nextIndex = Math.min(currentIndex + batchSize, allRankings.length);
       const hasMore = nextIndex < allRankings.length;
       
       console.log(`Adding jobs from index ${currentIndex} to ${nextIndex}, has more: ${hasMore}`);
       
-      // Add a slight delay to simulate loading (good for UX)
-      setTimeout(() => {
-        // Show the next 10 jobs (or whatever remains)
-        setJobRankings(prevRankings => {
-          const newRankings = [...prevRankings, ...allRankings.slice(currentIndex, nextIndex)];
-          console.log(`Now showing ${newRankings.length} jobs out of ${allRankings.length} total jobs`);
-          return newRankings;
-        });
-        
-        // Set hasMoreJobs state after updating the rankings
-        console.log(`Setting hasMoreJobs to: ${hasMore}`);
-        setHasMoreJobs(hasMore);
-        
-        // Update the current display index
-        chrome.storage.local.set({ currentDisplayIndex: nextIndex }, () => {
-          // Set loading state to false after state is updated
-          setIsLoadingMore(false);
-          console.log(`Loaded more jobs. Now showing ${nextIndex} of ${allRankings.length} jobs. Has more: ${hasMore}`);
-        });
-      }, 500); // Small delay for UX
+      // Show the next 10 jobs (or whatever remains)
+      setJobRankings(prevRankings => {
+        const newRankings = [...prevRankings, ...allRankings.slice(currentIndex, nextIndex)];
+        console.log(`Now showing ${newRankings.length} jobs out of ${allRankings.length} total jobs`);
+        return newRankings;
+      });
+      
+      // Set hasMoreJobs state after updating the rankings
+      setHasMoreJobs(hasMore);
+      
+      // Update the current display index
+      chrome.storage.local.set({ currentDisplayIndex: nextIndex }, () => {
+        // Set loading state to false after state is updated
+        setIsLoadingMore(false);
+        console.log(`Loaded more jobs. Now showing ${nextIndex} of ${allRankings.length} jobs. Has more: ${hasMore}`);
+      });
     });
   };
 

@@ -1,51 +1,11 @@
 import React from 'react';
-import { Box, Typography, Tabs, Tab, LinearProgress, Alert } from '@mui/material';
+import { Box, Typography, LinearProgress, Alert, Divider, Button } from '@mui/material';
 import ResumeUploader from './ResumeUploader';
 import JobRankingsComponent from './JobRankings';
 import { useLinkedInStatus } from '../hooks/useLinkedInStatus';
 import { useResumeUpload } from '../hooks/useResumeUpload';
 import { useJobRankings } from '../hooks/useJobRankings';
-import { useAppTabs } from '../hooks/useAppTabs';
 import { useLoadingState } from '../hooks/useLoadingState';
-
-// TabPanel component for the tab content
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <Box
-      role="tabpanel"
-      hidden={value !== index}
-      id={`simple-tabpanel-${index}`}
-      aria-labelledby={`simple-tab-${index}`}
-      sx={{ 
-        flex: 1,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'hidden'
-      }}
-      {...other}
-    >
-      {value === index && (
-        <Box sx={{ 
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          overflow: 'hidden',
-          p: 1
-        }}>
-          {children}
-        </Box>
-      )}
-    </Box>
-  );
-}
 
 // Header component
 function Header() {
@@ -166,18 +126,33 @@ function LinkedInStatusMessage({ isOnLinkedIn }: { isOnLinkedIn: boolean }) {
   );
 }
 
-// TabNavigation component
-function TabNavigation({ tabValue, handleTabChange }: { tabValue: number, handleTabChange: (event: React.SyntheticEvent, newValue: number) => void }) {
+// Compact Resume status component
+function ResumeStatus({ resumeUploaded, handleUploadClick }: { resumeUploaded: boolean, handleUploadClick: () => void }) {
   return (
-    <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-      <Tabs 
-        value={tabValue} 
-        onChange={handleTabChange}
-        variant="fullWidth"
+    <Box sx={{ 
+      display: 'flex', 
+      alignItems: 'center', 
+      justifyContent: 'space-between',
+      p: 2,
+      bgcolor: resumeUploaded ? 'success.light' : 'grey.100',
+      borderRadius: 1,
+      mb: 2
+    }}>
+      <Typography variant="body1" color={resumeUploaded ? 'white' : 'text.primary'}>
+        {resumeUploaded ? 'Resume uploaded ✓' : 'No resume uploaded'}
+      </Typography>
+      <Button 
+        variant={resumeUploaded ? "outlined" : "contained"}
+        color={resumeUploaded ? "inherit" : "primary"}
+        size="small"
+        onClick={handleUploadClick}
+        sx={{ 
+          color: resumeUploaded ? 'white' : undefined,
+          borderColor: resumeUploaded ? 'white' : undefined
+        }}
       >
-        <Tab label="Upload Resume" />
-        <Tab label="Job Rankings" />
-      </Tabs>
+        {resumeUploaded ? 'Change Resume' : 'Upload Resume'}
+      </Button>
     </Box>
   );
 }
@@ -192,14 +167,14 @@ function App() {
   // Get loading state
   const { isLoading, loadingMessage, setIsLoading, setLoadingMessage, error, setError } = useLoadingState();
   
-  // Get tab state
-  const { tabValue, setTabValue, handleTabChange } = useAppTabs();
+  // State for showing resume uploader
+  const [showResumeUploader, setShowResumeUploader] = React.useState(false);
   
   // Get resume upload state and handlers
   const { resumeUploaded, handleResumeUpload } = useResumeUpload({ 
     setIsLoading, 
     setError, 
-    setTabValue 
+    setTabValue: () => setShowResumeUploader(false) // Hide uploader after successful upload
   });
   
   // Get job rankings state and handlers
@@ -219,6 +194,14 @@ function App() {
     setError,
     isLoading
   });
+
+  // Toggle resume uploader visibility
+  const toggleResumeUploader = () => {
+    setShowResumeUploader(!showResumeUploader);
+  };
+  
+  // Determine whether to show the analysis button
+  const showAnalysisButton = resumeUploaded && jobRankings.length === 0;
   
   return (
     <Box sx={{ 
@@ -235,35 +218,40 @@ function App() {
         flex: 1, 
         display: 'flex', 
         flexDirection: 'column',
-        overflow: 'hidden'
+        overflow: 'hidden',
+        p: 2
       }}>
         {/* Not on LinkedIn message */}
         <LinkedInStatusMessage isOnLinkedIn={isOnLinkedIn} />
         
         {/* Error message */}
-        <ErrorMessage error={error || linkedInError} />
+        <ErrorMessage error={error} />
         
-        {/* Loading indicator */}
-        <LoadingOverlay isLoading={isLoading} message={loadingMessage} />
+        {/* Resume status */}
+        <ResumeStatus 
+          resumeUploaded={resumeUploaded} 
+          handleUploadClick={toggleResumeUploader} 
+        />
         
-        {/* Tabs */}
-        <TabNavigation tabValue={tabValue} handleTabChange={handleTabChange} />
+        {/* Resume upload modal */}
+        {showResumeUploader && (
+          <ResumeUploader 
+            onClose={toggleResumeUploader} 
+            onUpload={handleResumeUpload} 
+          />
+        )}
         
-        {/* Tab panels */}
-        <Box sx={{ 
-          flex: 1,
-          overflow: 'hidden',
-          position: 'relative' // Add position relative for proper overflow behavior
-        }}>
-          <TabPanel value={tabValue} index={0}>
-            <ResumeUploader 
-              onUpload={handleResumeUpload} 
-              resumeUploaded={resumeUploaded}
-            />
-          </TabPanel>
-          <TabPanel value={tabValue} index={1}>
+        {/* Job rankings */}
+        {isOnLinkedIn && (
+          <Box sx={{ 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            overflow: 'hidden',
+            position: 'relative'
+          }}>
             <JobRankingsComponent 
-              rankings={jobRankings} 
+              rankings={jobRankings}
               onJobClick={handleJobClick}
               onRefresh={handleMatchJobs}
               onLoadMore={handleLoadMore}
@@ -272,10 +260,16 @@ function App() {
               hasMoreJobs={hasMoreJobs}
               isLoadingMore={isLoadingMore}
               isLoadingNextPage={isLoadingNextPage}
+              showAnalysisButton={showAnalysisButton}
+              handleMatchJobs={handleMatchJobs}
+              resumeUploaded={resumeUploaded}
             />
-          </TabPanel>
-        </Box>
+          </Box>
+        )}
       </Box>
+      
+      {/* Loading overlay */}
+      <LoadingOverlay isLoading={isLoading} message={loadingMessage} />
     </Box>
   );
 }

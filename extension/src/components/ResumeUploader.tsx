@@ -7,10 +7,11 @@ import ClearIcon from '@mui/icons-material/Clear';
 
 interface ResumeUploaderProps {
   onUpload: (resumeData: string) => void;
-  resumeUploaded: boolean;
+  resumeUploaded?: boolean;
+  onClose?: () => void;
 }
 
-function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
+function ResumeUploader({ onUpload, resumeUploaded = false, onClose }: ResumeUploaderProps) {
   const [error, setError] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [base64Data, setBase64Data] = useState<string | null>(null);
@@ -104,8 +105,8 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
       display: 'flex',
       justifyContent: 'center',
       alignItems: 'center',
-      height: isPendingConfirmation ? 'calc(100vh - 200px)' : 'auto',
-      minHeight: isPendingConfirmation ? '400px' : 'auto'
+      height: 'auto',
+      minHeight: isPendingConfirmation ? '320px' : 'auto'
     }}>
       {resumeUploaded ? (
         <Box sx={{ 
@@ -139,17 +140,6 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
               />
             </Box>
           )}
-          <Typography variant="body1" sx={{ mt: 2 }}>
-            Go to the "Job Rankings" tab and click the "Analyze Jobs" button to see how well your resume matches with the job listings.
-          </Typography>
-          <Button 
-            variant="outlined" 
-            color="primary"
-            onClick={handleRemoveFile}
-            sx={{ mt: 2 }}
-          >
-            Upload a different resume
-          </Button>
         </Box>
       ) : isPendingConfirmation ? (
         <Box sx={{ 
@@ -168,7 +158,7 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
           boxShadow: '0px 2px 8px rgba(0, 0, 0, 0.05)'
         }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Please confirm your resume before starting the job ranking analysis
+            Upload this resume?
           </Typography>
           {fileName && (
             <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
@@ -210,10 +200,10 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
       ) : (
         <Box sx={{ width: '100%' }}>
           <Typography variant="h6" sx={{ mb: 2 }}>
-            Upload your resume to analyze job matches
+            Upload your resume
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Upload a PDF resume, then go to the "Job Rankings" tab and click the "Analyze Jobs" button to see how well your resume matches with LinkedIn job listings
+            Upload a PDF resume to analyze how well you match with LinkedIn job listings
           </Typography>
           
           {error && (
@@ -248,33 +238,12 @@ function ResumeUploader({ onUpload, resumeUploaded }: ResumeUploaderProps) {
             <Typography variant="body1" gutterBottom>
               {isDragActive ? 
                 'Drop your resume here...' : 
-                'Drag and drop your resume here, or click to select'
+                'Drag & drop your resume here, or click to select'
               }
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Only PDF files are accepted
+              Accepts PDF files only
             </Typography>
-            
-            {fileName && !isProcessing && !resumeUploaded && !isPendingConfirmation && (
-              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'center' }}>
-                <Chip
-                  label={fileName}
-                  color="primary"
-                  variant="outlined"
-                  onDelete={handleRemoveFile}
-                  deleteIcon={<ClearIcon />}
-                  sx={{ 
-                    maxWidth: '100%', 
-                    fontWeight: 500,
-                    '& .MuiChip-label': { 
-                      whiteSpace: 'normal',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis'
-                    }
-                  }}
-                />
-              </Box>
-            )}
           </Box>
         </Box>
       )}
