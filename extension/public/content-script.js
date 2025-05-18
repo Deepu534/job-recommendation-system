@@ -1300,8 +1300,8 @@ function initialize() {
 
       /* Floating button styles */
       #job-analyzer-floating-btn {
-        position: fixed;
-        bottom: 30px;
+        position: absolute;
+        top: calc(100vh - 90px);
         right: 30px;
         width: 60px;
         height: 60px;
@@ -1311,26 +1311,69 @@ function initialize() {
         display: flex;
         align-items: center;
         justify-content: center;
-        cursor: pointer;
+        cursor: grab;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
         z-index: 999999 !important;
-        transition: all 0.3s ease;
+        transition: box-shadow 0.3s ease, opacity 0.3s ease, transform 0.3s ease;
         border: none;
         padding: 0;
-        overflow: hidden;
-        opacity: 0.9;
+        overflow: visible;
       }
 
       #job-analyzer-floating-btn:hover {
-        transform: scale(1.1);
         box-shadow: 0 6px 14px rgba(0, 0, 0, 0.4);
-        opacity: 1;
       }
 
+      /* Floating button icon styles */
       #job-analyzer-floating-btn img {
-        width: 36px;
-        height: 36px;
-        object-fit: contain;
+        display: block;
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        pointer-events: none;
+      }
+
+      /* ADDED: New Drag Handle Visual (Rectangle with 2x2 dots) */
+      .drag-handle-visual {
+        position: absolute;
+        left: calc(100% - 2px);
+        top: 50%;
+        transform: translateY(-50%);
+        width: 28px;
+        height: 38px;
+        background-color: #0A66C2;
+        border-radius: 0 8px 8px 0;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        padding: 4px;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
+        pointer-events: none;
+        z-index: -1;
+      }
+
+      #job-analyzer-floating-btn:hover .drag-handle-visual {
+        opacity: 1;
+        z-index: 1;
+      }
+
+      .drag-handle-visual .dot-row {
+        display: flex;
+        justify-content: space-around;
+        width: 100%;
+      }
+
+      .drag-handle-visual .dot-row:first-child {
+        margin-bottom: 4px;
+      }
+
+      .drag-handle-visual .dot {
+        width: 5px;
+        height: 5px;
+        background-color: white;
+        border-radius: 50%;
       }
 
       /* Hide floating button when sidebar is open */
@@ -1409,9 +1452,74 @@ function initialize() {
     
     // Use the Chrome extension icon image instead of the SVG
     const iconURL = chrome.runtime.getURL('icons/icon48.png');
-    floatingBtn.innerHTML = `<img src="${iconURL}" alt="LinkedIn Job Analyzer" width="30" height="30">`;
+    floatingBtn.innerHTML = 
+      `<img src="${iconURL}" alt="LinkedIn Job Analyzer" width="50" height="50">` +
+      `<div class="drag-handle-visual">` +
+        `<div class="dot-row"><span class="dot"></span><span class="dot"></span></div>` +
+        `<div class="dot-row"><span class="dot"></span><span class="dot"></span></div>` +
+      `</div>`;
     
-    floatingBtn.title = "Open LinkedIn Job Analyzer";
+    floatingBtn.title = "LinkedIn Job Analyzer - Drag to move";
+    // document.body.appendChild(floatingBtn); // Will be appended after setting up drag listeners
+
+    // --- BEGIN ADDED DRAG FUNCTIONALITY ---
+    let isDragging = false;
+    let initialMouseY;
+    let initialButtonTop;
+    const baseTransition = 'box-shadow 0.3s ease, opacity 0.3s ease, transform 0.3s ease';
+    let wasJustDragged = false; // ADDED: Flag to distinguish drag from click
+
+    floatingBtn.addEventListener('mousedown', (e) => {
+      if (e.button !== 0) return; // Only respond to left mouse button
+
+      wasJustDragged = false; // ADDED: Reset flag on new mousedown
+      isDragging = true;
+      initialMouseY = e.clientY;
+      initialButtonTop = floatingBtn.offsetTop;
+
+      floatingBtn.style.cursor = 'grabbing';
+      document.body.style.userSelect = 'none'; // Prevent text selection during drag
+      floatingBtn.style.transition = 'none'; // Disable transition for smooth dragging
+      floatingBtn.classList.add('is-dragging'); // ADDED: Apply dragging class
+    });
+
+    document.addEventListener('mousemove', (e) => {
+      if (!isDragging) return;
+
+      e.preventDefault(); 
+      wasJustDragged = true; // ADDED: Set flag if mouse moves while dragging
+
+      const deltaY = e.clientY - initialMouseY;
+      let newTop = initialButtonTop + deltaY;
+
+      const viewportHeight = window.innerHeight;
+      const buttonHeight = floatingBtn.offsetHeight;
+
+      if (newTop < 0) {
+        newTop = 0; // Prevent dragging above the top
+      }
+      if (newTop + buttonHeight > viewportHeight) {
+        newTop = viewportHeight - buttonHeight; // Prevent dragging below the bottom
+      }
+
+      floatingBtn.style.top = `${newTop}px`;
+      floatingBtn.style.bottom = 'auto'; // Ensure 'bottom' doesn't interfere
+    });
+
+    const stopDragging = () => {
+      if (isDragging) {
+        isDragging = false;
+        floatingBtn.style.cursor = 'grab';
+        document.body.style.userSelect = ''; 
+        floatingBtn.style.transition = baseTransition; 
+        floatingBtn.classList.remove('is-dragging'); // ADDED: Remove dragging class
+      }
+    };
+
+    document.addEventListener('mouseup', stopDragging);
+    window.addEventListener('blur', stopDragging); // Stop dragging if window loses focus
+    // --- END ADDED DRAG FUNCTIONALITY ---
+
     document.body.appendChild(floatingBtn);
 
     // Create sidebar
@@ -1433,7 +1541,14 @@ function initialize() {
     document.body.appendChild(sidebar);
 
     // Add event listeners
-    floatingBtn.addEventListener('click', () => {
+    floatingBtn.addEventListener('click', (event) => { // Added event parameter
+      if (wasJustDragged) {
+        event.preventDefault(); // Prevent any default action of the click
+        event.stopPropagation(); // Stop the click from bubbling further if needed
+        wasJustDragged = false; // Reset for next interaction
+        return; // Do not open the sidebar
+      }
+      // If not dragged, proceed to open sidebar
       sidebar.classList.add('open');
       document.body.classList.add('job-analyzer-sidebar-open');
       injectReactApp();
