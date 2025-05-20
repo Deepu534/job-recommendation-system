@@ -1336,12 +1336,12 @@ function initialize() {
       /* ADDED: New Drag Handle Visual (Rectangle with 2x2 dots) */
       .drag-handle-visual {
         position: absolute;
-        left: calc(100% - 2px);
+        left: calc(100% - 8px);  /* Move it even closer to overlap slightly */
         top: 50%;
         transform: translateY(-50%);
         width: 28px;
-        height: 38px;
-        background-color: #0A66C2;
+        height: 42px;
+        background-color: #0A66C2;  /* Match the main brand color */
         border-radius: 0 8px 8px 0;
         display: flex;
         flex-direction: column;
@@ -1350,13 +1350,64 @@ function initialize() {
         padding: 4px;
         opacity: 0;
         transition: opacity 0.2s ease-in-out;
+        pointer-events: auto;  /* Allow pointer events */
+        cursor: grab;  /* Grab cursor for drag handle */
+        z-index: 1;  /* Lower z-index */
+      }
+
+      /* Make the image fit nicely inside the circle and appear above the drag handle */
+      #job-analyzer-floating-btn img {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: contain;
+        padding: 5px;
+        position: relative;
+        z-index: 2;  /* Higher z-index to appear above the drag handle */
+      }
+
+      /* Add a pseudo-element to smooth the connection between circle and rectangle */
+      #job-analyzer-floating-btn::after {
+        content: "";
+        position: absolute;
+        right: -6px;  /* Adjusted to match the drag handle */
+        top: 50%;
+        transform: translateY(-50%);
+        width: 10px;  /* Width to cover the gap */
+        height: 42px;
+        background-color: #0A66C2;  /* Same as drag handle */
+        z-index: 0;
+        opacity: 0;
+        transition: opacity 0.2s ease-in-out;
         pointer-events: none;
-        z-index: -1;
+      }
+
+      #job-analyzer-floating-btn:hover::after {
+        opacity: 1;
       }
 
       #job-analyzer-floating-btn:hover .drag-handle-visual {
         opacity: 1;
-        z-index: 1;
+      }
+
+      /* Make the circular button have a solid background */
+      #job-analyzer-floating-btn {
+        background-color: #0A66C2;  /* LinkedIn blue color */
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: visible;  /* Allow the drag handle to overflow */
+        cursor: pointer;  /* Pointer cursor for the clickable main button */
+      }
+
+      /* Make the image fit nicely inside the circle */
+      #job-analyzer-floating-btn img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: contain;
+        padding: 3px;
       }
 
       .drag-handle-visual .dot-row {
@@ -1370,8 +1421,8 @@ function initialize() {
       }
 
       .drag-handle-visual .dot {
-        width: 5px;
-        height: 5px;
+        width: 4px;
+        height: 4px;
         background-color: white;
         border-radius: 50%;
       }
@@ -1453,14 +1504,13 @@ function initialize() {
     // Use the Chrome extension icon image instead of the SVG
     const iconURL = chrome.runtime.getURL('icons/icon48.png');
     floatingBtn.innerHTML = 
-      `<img src="${iconURL}" alt="LinkedIn Job Analyzer" width="50" height="50">` +
+      `<img src="${iconURL}" alt="LinkedIn Job Analyzer">` +
       `<div class="drag-handle-visual">` +
         `<div class="dot-row"><span class="dot"></span><span class="dot"></span></div>` +
         `<div class="dot-row"><span class="dot"></span><span class="dot"></span></div>` +
       `</div>`;
     
     floatingBtn.title = "LinkedIn Job Analyzer - Drag to move";
-    // document.body.appendChild(floatingBtn); // Will be appended after setting up drag listeners
 
     // --- BEGIN ADDED DRAG FUNCTIONALITY ---
     let isDragging = false;
@@ -1470,7 +1520,11 @@ function initialize() {
     let wasJustDragged = false; // ADDED: Flag to distinguish drag from click
 
     floatingBtn.addEventListener('mousedown', (e) => {
-      if (e.button !== 0) return; // Only respond to left mouse button
+      // Check if the click is on the drag handle
+      const isDragHandle = e.target.classList.contains('drag-handle-visual') || 
+                          e.target.closest('.drag-handle-visual');
+      
+      if (e.button !== 0 || !isDragHandle) return; // Only respond to left mouse button on drag handle
 
       wasJustDragged = false; // ADDED: Reset flag on new mousedown
       isDragging = true;
